@@ -1,61 +1,65 @@
+const readline = require('readline');
 const MAX_TIME = 8;
-const STORAGE_KEY = "8seconds-knowledge-v4";
+
+// ANSI color codes
+const colors = {
+  reset: '\x1b[0m',
+  bright: '\x1b[1m',
+  dim: '\x1b[2m',
+  red: '\x1b[31m',
+  green: '\x1b[32m',
+  yellow: '\x1b[33m',
+  blue: '\x1b[34m',
+  magenta: '\x1b[35m',
+  cyan: '\x1b[36m',
+  white: '\x1b[37m',
+  gray: '\x1b[90m',
+};
+
+function colorize(text, color) {
+  return `${color}${text}${colors.reset}`;
+}
 
 const DEFAULT_KNOWLEDGE = {
   shelfExamined: false,
   batKnown: false,
   bedExamined: false,
   sheetKnown: false,
+  bedHidingKnown: false,
   closetExamined: false,
+  closetHidingKnown: false,
   windowSeen: false,
+  windowHidingKnown: false,
   doorHeard: false,
+  doorHidingKnown: false,
 };
 
 class KnowledgeStore {
-  constructor(storageKey, defaults) {
-    this.storageKey = storageKey;
+  constructor(defaults) {
     this.defaults = defaults;
-  }
-
-  normalize(raw) {
-    const source = raw && typeof raw === "object" ? raw : {};
-    return Object.keys(this.defaults).reduce((acc, key) => {
-      acc[key] = Boolean(source[key]);
-      return acc;
-    }, {});
+    this.data = { ...defaults };
   }
 
   load() {
-    try {
-      const raw = localStorage.getItem(this.storageKey);
-      if (!raw) {
-        return this.normalize(this.defaults);
-      }
-      return this.normalize(JSON.parse(raw));
-    } catch {
-      return this.normalize(this.defaults);
-    }
+    return { ...this.data };
   }
 
   save(value) {
-    try {
-      localStorage.setItem(this.storageKey, JSON.stringify(this.normalize(value)));
-    } catch {
-      // Prototype fallback: ignore storage errors.
-    }
+    this.data = { ...value };
   }
 }
 
 class Player {
   constructor() {
+    this.hiddenSpot = "chair";
     this.reset();
   }
 
   reset() {
-    this.hiddenSpot = "chair";
     this.coveredWithSheet = false;
     this.hasBat = false;
     this.hasSheet = false;
+    // Don't reset hiddenSpot - preserve hiding state across exploration actions
   }
 
   hideAt(spot) {
@@ -134,20 +138,27 @@ class Intruder {
     const hidden = game.player.hiddenSpot;
     const plan = [];
 
-    if (hidden === "bed") {
-      plan.push("closet");
-    } else if (hidden === "closet") {
-      plan.push("bed");
+    // If lamp is broken and player is hidden, intruder goes to light switch first
+    if (game.room.lampBroken && hidden !== "chair") {
+      plan.push("lightSwitch");
     } else {
-      plan.push("closet");
-    }
+      if (hidden === "bed") {
+        plan.push("closet");
+      } else if (hidden === "closet") {
+        plan.push("bed");
+      } else if (hidden === "door") {
+        plan.push("closet");
+      } else {
+        plan.push("closet");
+      }
 
-    if (game.room.knows("window")) {
-      plan.push("window");
-    }
+      if (game.room.knows("window")) {
+        plan.push("window");
+      }
 
-    plan.push("door");
-    plan.push(hidden);
+      plan.push("door");
+      plan.push(hidden);
+    }
 
     return [...new Set(plan)];
   }
@@ -171,6 +182,7 @@ class Narrator {
   describeSpot(spot) {
     if (spot === "bed") return "debaixo da cama";
     if (spot === "closet") return "dentro do armário";
+    if (spot === "door") return "atrás da porta";
     return "na cadeira";
   }
 
@@ -179,6 +191,7 @@ class Narrator {
     if (target === "closet") return "guarda-roupa";
     if (target === "window") return "janela";
     if (target === "door") return "porta";
+    if (target === "lightSwitch") return "interruptor de luz";
     return "centro do quarto";
   }
 
@@ -187,6 +200,7 @@ class Narrator {
     if (target === "closet") return "o guarda-roupa";
     if (target === "window") return "a janela";
     if (target === "door") return "a porta";
+    if (target === "lightSwitch") return "o interruptor de luz";
     return "o centro do quarto";
   }
 
@@ -195,6 +209,7 @@ class Narrator {
     if (target === "closet") return "ao guarda-roupa";
     if (target === "window") return "à janela";
     if (target === "door") return "à porta";
+    if (target === "lightSwitch") return "ao interruptor de luz";
     return "ao centro do quarto";
   }
 
@@ -204,7 +219,7 @@ class Narrator {
     lines.push(
       knownCount > 0
         ? "Você acorda no mesmo quarto de sempre, mas ele já não parece totalmente desconhecido."
-        : "Você acorda em um quarto fechado. O ar está parado."
+        : "Você acorda em um quarto fechado. Você tem apenas 8 segundos antes que alguém entre."
     );
 
     if (game.room.lampBroken) {
@@ -235,8 +250,8 @@ class Narrator {
   discoveryLine(kind, game) {
     if (kind === "shelf") {
       return game.knowledge.shelfExamined
-        ? "A estante já não é um mistério; agora você só confirma o que ela esconde."
-        : "Entre os livros gastos da estante, algo de madeira chama sua atenção.";
+        ? "Você confere a estante e encontrou um taco. Talvez seja útil."
+        : "Você confere a estante e encontrou um taco. Talvez seja útil.";
     }
 
     if (kind === "bed") {
@@ -282,8 +297,42 @@ class Narrator {
 
   intruderKillsExposedPlayer(game) {
     const lines = [];
-    lines.push("A maçaneta gira.");
-    lines.push("Um homem entra no quarto, vê você sentado na cadeira e dispara em seu peito.");
+    const action = game.currentAction;
+    
+    if (action) {
+      if (action.key === "analyzeShelf") {
+        lines.push("A maçaneta gira.");
+        lines.push("Um homem entra no quarto, vê você vasculhando a estante e dispara sem remorso.");
+      } else if (action.key === "analyzeBed") {
+        lines.push("A maçaneta gira.");
+        lines.push("Um homem entra no quarto, vê você examinando a cama e dispara sem hesitação.");
+      } else if (action.key === "analyzeCloset") {
+        lines.push("A maçaneta gira.");
+        lines.push("Um homem entra no quarto, vê você inspecionando o guarda-roupa e dispara friamente.");
+      } else if (action.key === "analyzeDoor") {
+        lines.push("A maçaneta gira.");
+        lines.push("Um homem entra no quarto, vê você estudando a porta e dispara sem piedade.");
+      } else if (action.key === "analyzeWindow") {
+        lines.push("A maçaneta gira.");
+        lines.push("Um homem entra no quarto, vê você olhando pela janela e dispara impiedosamente.");
+      } else if (action.key === "takeBat") {
+        lines.push("A maçaneta gira.");
+        lines.push("Um homem entra no quarto, vê você pegando o taco e dispara antes que você possa reagir.");
+      } else if (action.key === "takeSheet") {
+        lines.push("A maçaneta gira.");
+        lines.push("Um homem entra no quarto, vê você pegando o lençol e dispara sem compaixão.");
+      } else if (action.key === "breakLamp") {
+        lines.push("A maçaneta gira.");
+        lines.push("Um homem entra no quarto, vê você com o taco erguido e dispara sem dar chance.");
+      } else {
+        lines.push("A maçaneta gira.");
+        lines.push("Um homem entra no quarto, vê você sentado na cadeira e dispara em seu peito.");
+      }
+    } else {
+      lines.push("A maçaneta gira.");
+      lines.push("Um homem entra no quarto, vê você sentado na cadeira e dispara em seu peito.");
+    }
+    
     if (game.room.lampBroken) {
       lines.push("Na sombra, o disparo parece ainda mais seco.");
     }
@@ -344,6 +393,10 @@ class Narrator {
       return "Você se encolhe dentro do guarda-roupa. A madeira reclama, mas ainda aguenta.";
     }
 
+    if (spot === "door") {
+      return "Você se coloca atrás da porta, usando o vão como seu escudo.";
+    }
+
     return "Você permanece parado, esperando a próxima brecha.";
   }
 
@@ -354,6 +407,10 @@ class Narrator {
 
     if (spot === "chair") {
       return "O lençol encobre seu corpo de um jeito improvisado, como se fosse uma cortina mal amarrada.";
+    }
+
+    if (spot === "door") {
+      return "O lençol se estende atrás da porta, disfarçando sua silhueta contra a madeira.";
     }
 
     return "O lençol não resolve tudo, mas muda a textura da sua presença no quarto.";
@@ -445,14 +502,7 @@ class Action {
 
 class Game {
   constructor() {
-    this.dom = {
-      clock: document.getElementById("clock"),
-      log: document.getElementById("log"),
-      restart: document.getElementById("restartBtn"),
-      buttons: Array.from(document.querySelectorAll(".choice")),
-    };
-
-    this.knowledgeStore = new KnowledgeStore(STORAGE_KEY, DEFAULT_KNOWLEDGE);
+    this.knowledgeStore = new KnowledgeStore(DEFAULT_KNOWLEDGE);
     this.knowledge = this.knowledgeStore.load();
     this.player = new Player();
     this.room = new Room();
@@ -463,6 +513,7 @@ class Game {
     this.phase = "exploration";
     this.timeLeft = MAX_TIME;
     this.gameOver = false;
+    this.currentAction = null;
 
     this.slotMaps = {
       exploration: [
@@ -475,33 +526,30 @@ class Game {
         "takeBat",
         "takeSheet",
         "breakLamp",
+        "hideBed",
+        "hideCloset",
+        "hideDoor",
       ],
       intruder: [
         "hideBed",
         "hideCloset",
-        "switchHideout",
+        "hideDoor",
         "openDoor",
         "attack",
-        "wait",
+        "switchHideout",
         "useSheet",
         "escapeWindow",
         "recoverBat",
+        "goToDoor",
       ],
     };
 
-    this.bindEvents();
-    this.resetRun();
-  }
-
-  bindEvents() {
-    this.dom.buttons.forEach((button) => {
-      button.addEventListener("click", () => {
-        const slot = Number(button.dataset.slot);
-        this.handleSlot(slot);
-      });
+    this.rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout
     });
 
-    this.dom.restart.addEventListener("click", () => this.resetRun());
+    this.resetRun();
   }
 
   createActions() {
@@ -512,7 +560,7 @@ class Game {
         phases: ["exploration"],
         cost: 2.8,
         once: true,
-        visible: (game) => !game.actionMap?.get("analyzeShelf")?.used,
+        visible: (game) => !game.knowledge.shelfExamined,
         label: () => "Analisar: estante",
         run: (game) => {
           game.room.discover("shelf");
@@ -528,12 +576,13 @@ class Game {
         phases: ["exploration"],
         cost: 2.4,
         once: true,
-        visible: (game) => !game.actionMap?.get("analyzeBed")?.used,
+        visible: (game) => !game.knowledge.bedExamined,
         label: () => "Analisar: cama",
         run: (game) => {
           game.room.discover("bed");
           game.knowledge.bedExamined = true;
           game.knowledge.sheetKnown = true;
+          game.knowledge.bedHidingKnown = true;
           game.knowledgeStore.save(game.knowledge);
           game.logLines(game.narrator.discoveryLine("bed", game));
         },
@@ -544,11 +593,12 @@ class Game {
         phases: ["exploration"],
         cost: 2.6,
         once: true,
-        visible: (game) => !game.actionMap?.get("analyzeCloset")?.used,
+        visible: (game) => !game.knowledge.closetExamined,
         label: () => "Analisar: guarda-roupa",
         run: (game) => {
           game.room.discover("closet");
           game.knowledge.closetExamined = true;
+          game.knowledge.closetHidingKnown = true;
           game.knowledgeStore.save(game.knowledge);
           game.logLines(game.narrator.discoveryLine("closet", game));
         },
@@ -559,11 +609,12 @@ class Game {
         phases: ["exploration"],
         cost: 2.0,
         once: true,
-        visible: (game) => !game.actionMap?.get("analyzeDoor")?.used,
+        visible: (game) => !game.knowledge.doorHeard,
         label: () => "Analisar: porta",
         run: (game) => {
           game.room.discover("door");
           game.knowledge.doorHeard = true;
+          game.knowledge.doorHidingKnown = true;
           game.knowledgeStore.save(game.knowledge);
           game.logLines(game.narrator.discoveryLine("door", game));
         },
@@ -574,11 +625,12 @@ class Game {
         phases: ["exploration"],
         cost: 2.2,
         once: true,
-        visible: (game) => !game.actionMap?.get("analyzeWindow")?.used,
+        visible: (game) => !game.knowledge.windowSeen,
         label: () => "Analisar: janela",
         run: (game) => {
           game.room.discover("window");
           game.knowledge.windowSeen = true;
+          game.knowledge.windowHidingKnown = true;
           game.knowledgeStore.save(game.knowledge);
           game.logLines(game.narrator.discoveryLine("window", game));
         },
@@ -594,9 +646,8 @@ class Game {
         run: (game) => {
           if (game.phase === "exploration") {
             game.actionMap.get("wait").used = true;
-            game.logLine(`Você espera ${game.narrator.describeSpot(game.player.hiddenSpot)}.`);
+            game.logLine("Você espera no lugar.");
             game.timeLeft = 0;
-            game.renderClock();
             game.enterIntruderPhase();
             return;
           }
@@ -648,38 +699,52 @@ class Game {
       new Action({
         key: "hideBed",
         slot: 1,
-        phases: ["intruder"],
-        cost: 0,
-        once: false,
-        visible: (game) => game.room.knows("bed"),
+        phases: ["exploration", "intruder"],
+        cost: 1.5,
+        once: true,
+        visible: (game) => game.knowledge.bedHidingKnown,
         label: () => "Esconder-se: debaixo da cama",
         run: (game) => {
-          game.resolveIntruderHide("bed");
+          if (game.phase === "exploration") {
+            game.player.hideAt("bed");
+            game.logLine(game.narrator.hideLine("bed", game.player.coveredWithSheet));
+          } else {
+            game.resolveIntruderHide("bed");
+          }
         },
       }),
       new Action({
         key: "hideCloset",
         slot: 2,
-        phases: ["intruder"],
-        cost: 0,
-        once: false,
-        visible: (game) => game.room.knows("closet"),
+        phases: ["exploration", "intruder"],
+        cost: 1.5,
+        once: true,
+        visible: (game) => game.knowledge.closetHidingKnown,
         label: () => "Esconder-se: armário",
         run: (game) => {
-          game.resolveIntruderHide("closet");
+          if (game.phase === "exploration") {
+            game.player.hideAt("closet");
+            game.logLine(game.narrator.hideLine("closet", game.player.coveredWithSheet));
+          } else {
+            game.resolveIntruderHide("closet");
+          }
         },
       }),
       new Action({
-        key: "switchHideout",
+        key: "hideDoor",
         slot: 3,
-        phases: ["intruder"],
-        cost: 0,
-        once: false,
-        visible: (game) => game.room.knows("bed") && game.room.knows("closet"),
-        label: () => "Esconder-se: trocar de lugar",
+        phases: ["exploration", "intruder"],
+        cost: 1.0,
+        once: true,
+        visible: (game) => game.knowledge.doorHidingKnown,
+        label: () => "Esconder-se: atrás da porta",
         run: (game) => {
-          const next = game.player.hiddenSpot === "bed" ? "closet" : "bed";
-          game.resolveIntruderMove(next);
+          if (game.phase === "exploration") {
+            game.player.hideAt("door");
+            game.logLine(game.narrator.hideLine("door", game.player.coveredWithSheet));
+          } else {
+            game.resolveIntruderHide("door");
+          }
         },
       }),
       new Action({
@@ -713,9 +778,24 @@ class Game {
         cost: 0,
         once: false,
         visible: (game) => game.player.hasSheet,
-        label: () => "Esconder-se: lençol",
+        label: () => "Jogar lençol",
         run: (game) => {
-          game.resolveUseSheet();
+          game.resolveThrowSheet();
+        },
+      }),
+      new Action({
+        key: "switchHideout",
+        slot: 6,
+        phases: ["intruder"],
+        cost: 0,
+        once: false,
+        visible: () => true,
+        label: () => "Esconder-se: trocar de lugar",
+        run: (game) => {
+          const spots = ["bed", "closet", "door"];
+          const currentIndex = spots.indexOf(game.player.hiddenSpot);
+          const next = spots[(currentIndex + 1) % spots.length];
+          game.resolveIntruderMove(next);
         },
       }),
       new Action({
@@ -724,8 +804,8 @@ class Game {
         phases: ["intruder"],
         cost: 0,
         once: false,
-        visible: (game) => game.room.knows("window"),
-        label: () => "Analisar: janela",
+        visible: (game) => game.knowledge.windowHidingKnown,
+        label: () => "Fugir: janela",
         run: (game) => {
           game.resolveWindowEscape();
         },
@@ -741,6 +821,18 @@ class Game {
         run: (game) => {
           game.logLine("Você firma o taco com mais força e espera a próxima abertura.");
           game.resolveIntruderAdvance("hold");
+        },
+      }),
+      new Action({
+        key: "goToDoor",
+        slot: 10,
+        phases: ["intruder"],
+        cost: 0,
+        once: false,
+        visible: () => true,
+        label: () => "Ir para porta",
+        run: (game) => {
+          game.resolveGoToDoor();
         },
       }),
     ];
@@ -760,11 +852,15 @@ class Game {
   }
 
   logLine(text, kind = "entry") {
-    const line = document.createElement("p");
-    line.className = `entry ${kind}`;
-    line.textContent = text;
-    this.dom.log.appendChild(line);
-    this.dom.log.scrollTop = this.dom.log.scrollHeight;
+    if (kind === "danger") {
+      console.log(colorize(text, colors.red));
+    } else if (kind === "system") {
+      console.log(colorize(text, colors.green));
+    } else if (kind === "intruder") {
+      console.log(colorize(text, colors.magenta));
+    } else {
+      console.log(text);
+    }
   }
 
   logLines(lines, kind = "entry") {
@@ -773,37 +869,37 @@ class Game {
   }
 
   renderClock() {
-    this.dom.clock.textContent = Math.max(0, this.timeLeft).toFixed(1).padStart(4, "0");
-  }
-
-  showRestart() {
-    this.dom.restart.classList.remove("hidden");
-    this.dom.restart.classList.add("visible");
-  }
-
-  hideRestart() {
-    this.dom.restart.classList.add("hidden");
-    this.dom.restart.classList.remove("visible");
+    if (this.phase === "intruder") {
+      return;
+    }
+    const time = Math.max(0, this.timeLeft).toFixed(1);
+    const timeColor = this.timeLeft <= 2 ? colors.red : colors.yellow;
+    console.log(`\n${colorize('Tempo restante:', colors.cyan)} ${colorize(time + 's', timeColor)}\n`);
   }
 
   renderChoices() {
-    const keys = this.currentSlotKeys();
-    this.dom.buttons.forEach((button) => {
-      const slot = Number(button.dataset.slot);
-      const key = keys[slot - 1];
-      const action = key ? this.getAction(key) : null;
-
-      if (!action || !action.isVisible(this)) {
-        button.style.display = "none";
-        button.disabled = true;
-        button.textContent = "";
-        return;
-      }
-
-      button.style.display = "block";
-      button.disabled = this.gameOver;
-      button.textContent = action.getLabel(this);
+    if (this.gameOver) {
+      return;
+    }
+    const visibleActions = this.getVisibleActions();
+    console.log(colorize("\nOpções:", colors.bright));
+    visibleActions.forEach((action, index) => {
+      const optionNumber = colorize(`${index + 1}.`, colors.cyan);
+      console.log(`${optionNumber} ${action.label(this)}`);
     });
+    console.log();
+  }
+
+  getVisibleActions() {
+    const keys = this.currentSlotKeys();
+    const visible = [];
+    keys.forEach((key) => {
+      const action = this.getAction(key);
+      if (action && action.isVisible(this)) {
+        visible.push(action);
+      }
+    });
+    return visible;
   }
 
   resetActionUsage() {
@@ -814,15 +910,18 @@ class Game {
     this.phase = "exploration";
     this.timeLeft = MAX_TIME;
     this.gameOver = false;
+    this.currentAction = null;
     this.player.reset();
     this.room.resetRun();
     this.intruder.reset();
     this.resetActionUsage();
-    this.dom.log.innerHTML = "";
-    this.hideRestart();
+    
+    // Restore player's hidden spot from previous run if they were hidden
+    // This allows exploration actions to not unhide the player
     this.logLines(this.narrator.opening(this));
     this.renderClock();
     this.renderChoices();
+    this.promptInput();
   }
 
   consumeTime(amount) {
@@ -831,7 +930,6 @@ class Game {
     }
 
     this.timeLeft = Math.max(0, this.timeLeft - amount);
-    this.renderClock();
   }
 
   endGame(lines, kind = "danger") {
@@ -842,8 +940,8 @@ class Game {
     this.gameOver = true;
     this.logLines(lines, kind);
     this.renderClock();
-    this.renderChoices();
-    this.showRestart();
+    console.log(colorize("\n--- FIM DE JOGO ---\n", colors.bright));
+    this.promptRestart();
   }
 
   enterIntruderPhase() {
@@ -854,8 +952,7 @@ class Game {
     }
 
     this.phase = "intruder";
-    this.logLines(outcome.lines);
-    this.renderChoices();
+    this.logLines(outcome.lines, "intruder");
   }
 
   advanceIntruderSearch() {
@@ -984,12 +1081,13 @@ class Game {
       return;
     }
 
-    if (this.intruder.targetName === "door" || this.intruder.targetName === this.player.hiddenSpot) {
-      this.endGame(this.narrator.escapeDoorFailure(this));
-      return;
-    }
-
-    this.endGame(this.narrator.escapeDoorSuccess(this), "system");
+    // If intruder is not stunned, opening the door alerts them
+    this.endGame([
+      "Você gira a maçaneta, mas o rangido da porta denuncia sua posição.",
+      "Mesmo no escuro, ele atira na direção do som.",
+      "Os clarões das balas iluminam o quarto por um instante.",
+      "Você cai antes de conseguir sair.",
+    ]);
   }
 
   resolveUseSheet() {
@@ -1004,6 +1102,41 @@ class Game {
 
     this.player.coveredWithSheet = true;
     this.logLine(this.narrator.sheetLine(this.player.hiddenSpot));
+    this.logLine(this.narrator.intruderPrompt(this));
+  }
+
+  resolveThrowSheet() {
+    if (this.gameOver || this.phase !== "intruder") {
+      return;
+    }
+
+    if (!this.player.hasSheet) {
+      this.logLine("Você procura o lençol, mas ele não está com você.");
+      return;
+    }
+
+    this.player.hasSheet = false;
+    this.logLine("Você joga o lençol em direção ao intruso.");
+    
+    if (this.intruder.stunned) {
+      this.logLine("Ele já está desequilibrado. O lençol só confunde mais a situação.");
+      this.logLine(this.narrator.intruderPrompt(this));
+      return;
+    }
+
+    // Sheet throw distracts the intruder
+    this.logLine("O lençol voa na direção dele e ele se distrai por um instante.");
+    this.intruder.stunned = true;
+    this.logLine(this.narrator.intruderPrompt(this));
+  }
+
+  resolveGoToDoor() {
+    if (this.gameOver || this.phase !== "intruder") {
+      return;
+    }
+
+    this.player.hideAt("door");
+    this.logLine("Você se move em direção à porta.");
     this.logLine(this.narrator.intruderPrompt(this));
   }
 
@@ -1030,10 +1163,17 @@ class Game {
       return;
     }
 
-    const action = this.getActionBySlot(slot);
-    if (!action || !action.isVisible(this)) {
+    const visibleActions = this.getVisibleActions();
+    const action = visibleActions[slot - 1];
+    
+    if (!action) {
+      console.log("Opção inválida.");
+      this.promptInput();
       return;
     }
+
+    // Track current action for contextual death messages
+    this.currentAction = action;
 
     if (action.once) {
       action.used = true;
@@ -1048,10 +1188,42 @@ class Game {
 
     if (!this.gameOver && this.phase === "exploration" && this.timeLeft <= 0) {
       this.enterIntruderPhase();
+      return;
+    }
+
+    if (this.phase === "intruder") {
+      this.renderChoices();
+      this.promptInput();
+      return;
     }
 
     this.renderClock();
     this.renderChoices();
+    this.promptInput();
+  }
+
+  promptInput() {
+    this.rl.question(colorize("Escolha uma opção (número): ", colors.gray), (answer) => {
+      const slot = parseInt(answer);
+      if (isNaN(slot)) {
+        console.log(colorize("Por favor, digite um número válido.", colors.red));
+        this.promptInput();
+        return;
+      }
+      this.handleSlot(slot);
+    });
+  }
+
+  promptRestart() {
+    this.rl.question(colorize("\nDeseja jogar novamente? (s/n): ", colors.gray), (answer) => {
+      if (answer.toLowerCase() === 's' || answer.toLowerCase() === 'sim') {
+        this.resetRun();
+      } else {
+        console.log(colorize("Obrigado por jogar!", colors.green));
+        this.rl.close();
+        process.exit(0);
+      }
+    });
   }
 }
 
