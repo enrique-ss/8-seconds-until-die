@@ -1,11 +1,29 @@
 const readline = require('readline');
 const MAX_TIME = 8;
 
+// Noise costs for each action
+const NOISE_COSTS = {
+  hideBed: 1,
+  hideCloset: 2,
+  hideDoor: 1,
+  switchHideout: 2,
+  openDoor: 3,
+  attack: 2,
+  useSheet: 0,
+  throwSheet: 2,
+  escapeWindow: 3,
+  recoverBat: 0,
+  wait: 0,
+  goToDoor: 1,
+  breakLamp: 3,
+};
+
 // ANSI color codes
 const colors = {
   reset: '\x1b[0m',
   bright: '\x1b[1m',
   dim: '\x1b[2m',
+  italic: '\x1b[3m',
   red: '\x1b[31m',
   green: '\x1b[32m',
   yellow: '\x1b[33m',
@@ -111,6 +129,9 @@ class Intruder {
     this.plan = [];
     this.planIndex = 0;
     this.currentTarget = "door";
+    this.alert = false;
+    this.triedSwitch = false;
+    this.suspicion = 0;
   }
 
   enter(game) {
@@ -139,26 +160,27 @@ class Intruder {
     const plan = [];
 
     // If lamp is broken and player is hidden, intruder goes to light switch first
-    if (game.room.lampBroken && hidden !== "chair") {
+    if (game.room.lampBroken && !this.triedSwitch && hidden !== "chair") {
       plan.push("lightSwitch");
-    } else {
-      if (hidden === "bed") {
-        plan.push("closet");
-      } else if (hidden === "closet") {
-        plan.push("bed");
-      } else if (hidden === "door") {
-        plan.push("closet");
-      } else {
-        plan.push("closet");
-      }
-
-      if (game.room.knows("window")) {
-        plan.push("window");
-      }
-
-      plan.push("door");
-      plan.push(hidden);
     }
+
+    // Build search order based on player's current hiding spot
+    if (hidden === "bed") {
+      plan.push("closet");
+    } else if (hidden === "closet") {
+      plan.push("bed");
+    } else if (hidden === "door") {
+      plan.push("closet");
+    } else {
+      plan.push("closet");
+    }
+
+    if (game.room.knows("window")) {
+      plan.push("window");
+    }
+
+    plan.push("door");
+    plan.push(hidden);
 
     return [...new Set(plan)];
   }
@@ -171,6 +193,58 @@ class Intruder {
     this.planIndex = Math.min(this.planIndex + 1, this.plan.length - 1);
     this.currentTarget = this.plan[this.planIndex];
     return this.currentTarget;
+  }
+
+  step(game) {
+    // Handle light switch stage
+    if (this.currentTarget === "lightSwitch") {
+      this.triedSwitch = true;
+      if (game.room.lampBroken) {
+        game.logLine("Ele aciona o interruptor. Nada acontece.");
+        game.logLine("Ele nota os cacos no chão e o corpo se enrijece.");
+        this.alert = true;
+        this.suspicion += 2;
+      } else {
+        game.logLine("Ele aciona o interruptor e o quarto se ilumina.");
+      }
+      this.plan = this.buildPlan(game);
+      this.planIndex = 0;
+      this.currentTarget = this.plan[0];
+      return;
+    }
+
+    // Normal advance through search plan
+    this.advance();
+  }
+
+  registerNoise(game, actionKey) {
+    const base = NOISE_COSTS[actionKey] ?? 1;
+    const bonus = this.alert ? 1 : 0;
+    this.suspicion += base + bonus;
+
+    const threshold = this.alert ? 3 : 5;
+    if (this.suspicion >= threshold && !this.stunned) {
+      this.honeInOnPlayer(game);
+      this.suspicion = 0;
+    }
+  }
+
+  honeInOnPlayer(game) {
+    this.plan = [game.player.hiddenSpot];
+    this.planIndex = 0;
+    this.currentTarget = this.plan[0];
+    game.logLine("Um barulho o faz virar a cabeça na sua direção.");
+  }
+
+  takeTurn(game, playerActionKey) {
+    this.registerNoise(game, playerActionKey);
+
+    if (this.stunned) {
+      return;
+    }
+
+    this.step(game);
+    game.logLine(game.narrator.intruderPrompt(game));
   }
 
   get targetName() {
@@ -852,8 +926,8 @@ class Game {
   }
 
   logLine(text, kind = "entry") {
-    if (kind === "danger") {
-      console.log(colorize(text, colors.red));
+    if (kind === "entry") {
+      console.log(colorize(colorize(text, colors.bright), colors.italic));
     } else if (kind === "system") {
       console.log(colorize(text, colors.green));
     } else if (kind === "intruder") {
@@ -957,7 +1031,6 @@ class Game {
 
   advanceIntruderSearch() {
     if (this.intruder.stunned) {
-      this.logLine(this.narrator.intruderPrompt(this));
       return;
     }
 
@@ -968,7 +1041,6 @@ class Game {
         this.intruder.previousTarget = current;
         const next = this.intruder.advance();
         this.logLines(this.narrator.intruderMiss(this));
-        this.logLine(this.narrator.intruderPrompt(this));
         return;
       }
 
@@ -991,14 +1063,10 @@ class Game {
 
     if (reason === "wait" && this.intruder.stunned) {
       this.logLine("Ele ainda está cambaleando. Esperar agora só compra mais um instante.");
-      this.logLine(this.narrator.intruderPrompt(this));
       return;
     }
 
     this.advanceIntruderSearch();
-    if (!this.gameOver) {
-      this.logLine(this.narrator.intruderPrompt(this));
-    }
   }
 
   resolveIntruderHide(nextSpot) {
@@ -1021,7 +1089,6 @@ class Game {
 
     this.player.hideAt(nextSpot);
     this.logLine(this.narrator.hideLine(nextSpot, this.player.coveredWithSheet));
-    this.logLine(this.narrator.intruderPrompt(this));
   }
 
   resolveIntruderMove(nextSpot) {
@@ -1044,7 +1111,6 @@ class Game {
 
     this.player.hideAt(nextSpot);
     this.logLine(this.narrator.hideLine(nextSpot, this.player.coveredWithSheet));
-    this.logLine(this.narrator.intruderPrompt(this));
   }
 
   resolveIntruderAttack() {
@@ -1057,7 +1123,6 @@ class Game {
 
     if (this.intruder.stunned) {
       this.logLine("Ele já está desequilibrado. Seu golpe só reforça a chance de fuga.");
-      this.logLine(this.narrator.intruderPrompt(this));
       return;
     }
 
@@ -1068,7 +1133,6 @@ class Game {
 
     this.intruder.stunned = true;
     this.logLines(this.narrator.stunSuccess(this));
-    this.logLine(this.narrator.intruderPrompt(this));
   }
 
   resolveIntruderOpenDoor() {
@@ -1102,7 +1166,6 @@ class Game {
 
     this.player.coveredWithSheet = true;
     this.logLine(this.narrator.sheetLine(this.player.hiddenSpot));
-    this.logLine(this.narrator.intruderPrompt(this));
   }
 
   resolveThrowSheet() {
@@ -1120,14 +1183,12 @@ class Game {
     
     if (this.intruder.stunned) {
       this.logLine("Ele já está desequilibrado. O lençol só confunde mais a situação.");
-      this.logLine(this.narrator.intruderPrompt(this));
       return;
     }
 
     // Sheet throw distracts the intruder
     this.logLine("O lençol voa na direção dele e ele se distrai por um instante.");
     this.intruder.stunned = true;
-    this.logLine(this.narrator.intruderPrompt(this));
   }
 
   resolveGoToDoor() {
@@ -1137,7 +1198,6 @@ class Game {
 
     this.player.hideAt("door");
     this.logLine("Você se move em direção à porta.");
-    this.logLine(this.narrator.intruderPrompt(this));
   }
 
   resolveWindowEscape() {
@@ -1162,6 +1222,8 @@ class Game {
     if (this.gameOver) {
       return;
     }
+
+    console.clear();
 
     const visibleActions = this.getVisibleActions();
     const action = visibleActions[slot - 1];
@@ -1192,8 +1254,11 @@ class Game {
     }
 
     if (this.phase === "intruder") {
-      this.renderChoices();
-      this.promptInput();
+      this.intruder.takeTurn(this, action.key);
+      if (!this.gameOver) {
+        this.renderChoices();
+        this.promptInput();
+      }
       return;
     }
 
