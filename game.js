@@ -753,7 +753,7 @@ class Game {
         phases: ["intruder"],
         cost: 0,
         once: false,
-        visible: () => true,
+        visible: (game) => game.player.hiddenSpot === "door",
         label: () => "Abrir a porta",
         run: (game) => {
           game.resolveIntruderOpenDoor();
