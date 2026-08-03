@@ -49,6 +49,19 @@ module.exports = {
     prompt: "O que você faz?",
   },
 
+  // Textos de despertar após morte
+  awaken: {
+    door: "Você se lembra do homem correndo em sua direção e o tiro no peito. Acorda novamente.",
+    found: "Você se lembra de ser encontrado sem esconderijo. Acorda novamente.",
+    shot: "Você se lembra do disparo na escuridão. Acorda novamente.",
+    caughtMoving: "Você se lembra de ser visto se movendo. Acorda novamente.",
+    caughtSwitching: "Você se lembra de ser visto trocando de lugar. Acorda novamente.",
+    stunFailed: "Você se lembra de errar o golpe com o taco. Acorda novamente.",
+    doorAlert: "Você se lembra da porta rangeando e os tiros. Acorda novamente.",
+    windowFailed: "Você se lembra de não conseguir escapar pela janela. Acorda novamente.",
+    default: "Você acorda no mesmo quarto.",
+  },
+
   // Textos de descoberta
   discovery: {
     shelf: "Você encontra um taco na estante.",

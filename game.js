@@ -923,6 +923,7 @@ class Game {
     this.intruder = new Intruder();
     this.narrator = new Narrator();
     this._firstRun = true;  // Flag para controlar primeira execução
+    this._deathCause = null;  // Causa da morte anterior
     this.actions = this.createActions();
     this.actionMap = new Map(this.actions.map((action) => [action.key, action]));
     this.phase = "exploration";  // Fase atual: exploration ou intruder
@@ -1031,7 +1032,9 @@ class Game {
       this.logLines(this.narrator.opening(this));
       this._firstRun = false;
     } else {
-      this.logLine(texts.opening.repeat);
+      // Mostra texto de despertar baseado na causa da morte anterior
+      const awakenText = texts.awaken[this._deathCause] || texts.awaken.default;
+      this.logLine(awakenText);
       this.logLine(texts.opening.prompt);
     }
     
@@ -1050,12 +1053,13 @@ class Game {
   }
 
 // Finaliza o jogo com mensagem de resultado
-  endGame(lines, kind = "danger") {
+  endGame(lines, kind = "danger", cause = "unknown") {
     if (this.gameOver) {
       return;
     }
 
     this.gameOver = true;
+    this._deathCause = cause;  // Armazena causa da morte
     this.logLines(lines, kind);
     this.renderClock();
     console.log(colorizeAndStylize("\n" + texts.ui.gameOver + "\n", colors.white, styles.bold));
@@ -1066,7 +1070,7 @@ class Game {
   enterIntruderPhase() {
     const outcome = this.intruder.enter(this);
     if (outcome.type === "death") {
-      this.endGame(outcome.lines);
+      this.endGame(outcome.lines, "danger", "shot");
       return;
     }
 
@@ -1091,7 +1095,7 @@ class Game {
       this.endGame([
         `Ele chega exatamente à ${this.narrator.describeTarget(this.player.hiddenSpot)}.`,
         texts.errors.noTime,
-      ]);
+      ], "danger", "found");
       return;
     }
 
@@ -1127,7 +1131,7 @@ class Game {
       this.endGame([
         texts.errors.caughtMoving.replace("{spot}", this.narrator.describeSpot(nextSpot)),
         texts.errors.movementDenounces,
-      ]);
+      ], "danger", "caughtMoving");
       return;
     }
 
@@ -1150,7 +1154,7 @@ class Game {
       this.endGame([
         texts.errors.caughtSwitching.replace("{spot}", this.narrator.describeSpot(nextSpot)),
         texts.errors.switchDenounces,
-      ]);
+      ], "danger", "caughtSwitching");
       return;
     }
 
@@ -1173,7 +1177,7 @@ class Game {
     }
 
     if (target !== spot && !(spot === "chair" && target === "door")) {
-      this.endGame(this.narrator.stunFailure(this));
+      this.endGame(this.narrator.stunFailure(this), "danger", "stunFailed");
       return;
     }
 
@@ -1188,7 +1192,7 @@ class Game {
     }
 
     if (this.intruder.stunned) {
-      this.endGame(this.narrator.escapeDoorSuccess(this), "system");
+      this.endGame(this.narrator.escapeDoorSuccess(this), "system", null);
       return;
     }
 
@@ -1198,7 +1202,7 @@ class Game {
       texts.errors.shootsAtSound,
       texts.errors.muzzleFlashes,
       texts.errors.fallsBeforeEscape,
-    ]);
+    ], "danger", "doorAlert");
   }
 
 // Resolve uso do lençol para cobertura
@@ -1265,11 +1269,11 @@ class Game {
     }
 
     if (this.intruder.stunned || this.intruder.targetName !== "window") {
-      this.endGame(this.narrator.escapeWindowSuccess(this), "system");
+      this.endGame(this.narrator.escapeWindowSuccess(this), "system", null);
       return;
     }
 
-    this.endGame(this.narrator.escapeWindowFailure());
+    this.endGame(this.narrator.escapeWindowFailure(), "danger", "windowFailed");
   }
 
 // Processa escolha de ação do jogador

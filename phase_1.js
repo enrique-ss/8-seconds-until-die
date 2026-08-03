@@ -70,7 +70,7 @@ module.exports = [
       game.endGame([
         texts.deathByDoor.manRuns,
         texts.deathByDoor.shootsChest,
-      ]);
+      ], "danger", "door");
     },
   },
   {
