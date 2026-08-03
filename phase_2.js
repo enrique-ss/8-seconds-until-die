@@ -4,7 +4,6 @@ const texts = require('./texts.js');
 module.exports = [
   {
     key: "openDoor",
-    slot: 4,
     phases: ["intruder"],
     cost: 0,
     once: true,
@@ -16,7 +15,6 @@ module.exports = [
   },
   {
     key: "attack",
-    slot: 5,
     phases: ["intruder"],
     cost: 0,
     once: true,
@@ -28,7 +26,6 @@ module.exports = [
   },
   {
     key: "switchHideout",
-    slot: 6,
     phases: ["intruder"],
     cost: 0,
     once: false,
@@ -43,7 +40,6 @@ module.exports = [
   },
   {
     key: "useSheet",
-    slot: 7,
     phases: ["intruder"],
     cost: 0,
     once: true,
@@ -55,7 +51,6 @@ module.exports = [
   },
   {
     key: "escapeWindow",
-    slot: 8,
     phases: ["intruder"],
     cost: 0,
     once: true,
@@ -66,21 +61,7 @@ module.exports = [
     },
   },
   {
-    key: "recoverBat",
-    slot: 9,
-    phases: ["intruder"],
-    cost: 0,
-    once: true,
-    visible: (game) => game.player.hasBat,
-    label: () => texts.actionLabels.recoverBat,
-    run: (game) => {
-      game.logLine(texts.playerActions.recoverBat);
-      game.resolveIntruderAdvance("hold");
-    },
-  },
-  {
     key: "goToDoor",
-    slot: 10,
     phases: ["intruder"],
     cost: 0,
     once: false,

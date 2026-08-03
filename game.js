@@ -2,6 +2,175 @@ const readline = require('readline');
 const texts = require('./texts.js');
 const phase1Actions = require('./phase_1.js');
 const phase2Actions = require('./phase_2.js');
+
+// ============================================
+// CLASSES DO JOGO
+// ============================================
+
+// Classe base para entidades do jogo
+class Entity {
+  constructor(name, description) {
+    this._name = name;
+    this._description = description;
+    this._id = this._generateId();
+  }
+
+  get name() {
+    return this._name;
+  }
+
+  get description() {
+    return this._description;
+  }
+
+  get id() {
+    return this._id;
+  }
+
+  _generateId() {
+    return Math.random().toString(36).substr(2, 9);
+  }
+
+  describe() {
+    throw new Error("Método describe() deve ser implementado pela subclass");
+  }
+}
+
+// Item base
+class Item extends Entity {
+  constructor(name, description, weight = 0) {
+    super(name, description);
+    this._weight = weight;
+    this._owner = null;
+  }
+
+  get weight() {
+    return this._weight;
+  }
+
+  get owner() {
+    return this._owner;
+  }
+
+  set owner(newOwner) {
+    this._owner = newOwner;
+  }
+
+  describe() {
+    return `${this._name} (peso: ${this._weight})`;
+  }
+}
+
+// Arma (herda de Item)
+class Weapon extends Item {
+  constructor(name, description, weight, damage) {
+    super(name, description, weight);
+    this._damage = damage;
+  }
+
+  get damage() {
+    return this._damage;
+  }
+
+  describe() {
+    return `${super.describe()} - Dano: ${this._damage}`;
+  }
+
+  attack() {
+    return this._damage;
+  }
+}
+
+// Ferramenta (herda de Item)
+class Tool extends Item {
+  constructor(name, description, weight, utility) {
+    super(name, description, weight);
+    this._utility = utility;
+  }
+
+  get utility() {
+    return this._utility;
+  }
+
+  describe() {
+    return `${super.describe()} - Utilidade: ${this._utility}`;
+  }
+
+  use() {
+    return this._utility;
+  }
+}
+
+// Inventário
+class Inventory {
+  constructor(maxCapacity = 10) {
+    this._items = [];
+    this._maxCapacity = maxCapacity;
+  }
+
+  addItem(item) {
+    if (this._items.length >= this._maxCapacity) {
+      throw new Error("Inventário cheio");
+    }
+    if (!(item instanceof Item)) {
+      throw new Error("Apenas itens podem ser adicionados");
+    }
+    this._items.push(item);
+    item.owner = this;
+  }
+
+  removeItem(itemId) {
+    const index = this._items.findIndex(item => item.id === itemId);
+    if (index === -1) {
+      throw new Error("Item não encontrado");
+    }
+    const item = this._items.splice(index, 1)[0];
+    item.owner = null;
+    return item;
+  }
+
+  get items() {
+    return [...this._items];
+  }
+
+  hasItem(itemName) {
+    return this._items.some(item => item.name === itemName);
+  }
+
+  get capacity() {
+    return this._items.length;
+  }
+
+  get maxCapacity() {
+    return this._maxCapacity;
+  }
+}
+
+// Localização no jogo
+class Location extends Entity {
+  constructor(name, description, hidingSpot = false) {
+    super(name, description);
+    this._hidingSpot = hidingSpot;
+    this._discovered = false;
+  }
+
+  get isHidingSpot() {
+    return this._hidingSpot;
+  }
+
+  get discovered() {
+    return this._discovered;
+  }
+
+  set discovered(value) {
+    this._discovered = value;
+  }
+
+  describe() {
+    return this._description;
+  }
+}
+
 // Tempo máximo em segundos antes do intruso entrar
 const MAX_TIME = 8;
 
@@ -16,10 +185,11 @@ const NOISE_COSTS = {
   useSheet: 0,
   throwSheet: 2,
   escapeWindow: 3,
-  recoverBat: 0,
   wait: 0,
   goToDoor: 1,
   breakLamp: 3,
+  breakWindow: 2,
+  openWindow: 1,
 };
 
 // Códigos de cores ANSI para o terminal
@@ -44,11 +214,6 @@ function colorize(text, color) {
   return `${color}${text}${colors.reset}`;
 }
 
-// Aplica estilo ao texto
-function stylize(text, style) {
-  return `${style}${text}${styles.reset}`;
-}
-
 // Aplica cor e estilo ao texto
 function colorizeAndStylize(text, color, style) {
   return `${color}${style}${text}${styles.reset}${colors.reset}`;
@@ -67,107 +232,299 @@ const DEFAULT_KNOWLEDGE = {
   windowHidingKnown: false,// Se jogador sabe que pode se esconder na janela
   doorHeard: false,        // Se porta já foi ouvida
   doorHidingKnown: false,  // Se jogador sabe que pode se esconder atrás da porta
+  windowOpen: false,       // Se janela está aberta
+  windowBroken: false,     // Se janela está quebrada
 };
 
-// Armazena conhecimento do jogador entre partidas
-class KnowledgeStore {
-  constructor(defaults) {
-    this.defaults = defaults;
-    this.data = { ...defaults };
-  }
-
-// Carrega conhecimento salvo
-  load() {
-    return { ...this.data };
-  }
-
-// Salva conhecimento atual
-  save(value) {
-    this.data = { ...value };
-  }
-}
-
 // Gerencia estado e itens do jogador
-class Player {
+// HERANÇA: Player herda de Entity
+// COMPOSIÇÃO: Player tem um Inventory
+class Player extends Entity {
   constructor() {
-    this.hiddenSpot = "chair";
+    super(texts.entities.player.name, texts.entities.player.description);
+    this._hiddenSpot = "chair";
+    this._inventory = new Inventory(5);  // Composição: Player tem um Inventory
+    this._coveredWithSheet = false;
     this.reset();
   }
 
   reset() {
-    this.coveredWithSheet = false;
-    this.hasBat = false;
-    this.hasSheet = false;
+    this._coveredWithSheet = false;
+    this._inventory = new Inventory(5);  // Reinicia inventário
     // Não reseta posição escondida para manter estado entre ações
   }
 
-// Define onde jogador está escondido
+  // ENCAPSULAMENTO: Getters e setters para controlar acesso
+  get hiddenSpot() {
+    return this._hiddenSpot;
+  }
+
+  set hiddenSpot(spot) {
+    this._hiddenSpot = spot;
+  }
+
+  get coveredWithSheet() {
+    return this._coveredWithSheet;
+  }
+
+  set coveredWithSheet(value) {
+    this._coveredWithSheet = value;
+  }
+
+  get inventory() {
+    return this._inventory;
+  }
+
+  // POLIMORFISMO: Sobrescrita do método describe()
+  describe() {
+    return `${this._name} está escondido em ${this._hiddenSpot}`;
+  }
+
+  // Método para se esconder
   hideAt(spot) {
-    this.hiddenSpot = spot;
+    this._hiddenSpot = spot;
   }
 
-// Verifica se jogador possui item
+  // Método para verificar se tem item específico
+  hasItem(itemName) {
+    return this._inventory.hasItem(itemName);
+  }
+
+  // Método para adicionar item ao inventário
+  addItem(item) {
+    this._inventory.addItem(item);
+  }
+
+  // Método para remover item do inventário
+  removeItem(itemId) {
+    return this._inventory.removeItem(itemId);
+  }
+
+  // Método para verificar se tem arma
+  hasWeapon() {
+    return this._inventory.items.some(item => item instanceof Weapon);
+  }
+
+  // Getter para arma (se tiver)
+  get weapon() {
+    return this._inventory.items.find(item => item instanceof Weapon);
+  }
+
+  // Compatibilidade com código antigo
   has(item) {
-    return Boolean(this[item]);
+    if (item === "bat") return this.hasItem(texts.entities.items.bat.name);
+    if (item === "sheet") return this.hasItem(texts.entities.items.sheet.name);
+    return false;
   }
 
-// Adiciona item ao inventário
+  // Getters para compatibilidade
+  get hasBat() {
+    return this.hasItem(texts.entities.items.bat.name);
+  }
+
+  get hasSheet() {
+    return this.hasItem(texts.entities.items.sheet.name);
+  }
+
   gain(item) {
-    this[item] = true;
+    if (item === "hasBat") {
+      const bat = new Weapon(
+        texts.entities.items.bat.name,
+        texts.entities.items.bat.description,
+        2,
+        5
+      );
+      this.addItem(bat);
+    } else if (item === "hasSheet") {
+      const sheet = new Tool(
+        texts.entities.items.sheet.name,
+        texts.entities.items.sheet.description,
+        1,
+        "camuflagem"
+      );
+      this.addItem(sheet);
+    }
   }
 }
 
 // Gerencia estado do quarto e objetos descobertos
-class Room {
+// HERANÇA: Room herda de Entity
+// COMPOSIÇÃO: Room contém múltiplos Location
+class Room extends Entity {
   constructor() {
+    super(texts.entities.room.name, texts.entities.room.description);
+    this._lampBroken = false;
+    this._locations = new Map();    // Composição: Room contém Locations
+    this._initializeLocations();
     this.resetRun();
   }
 
-// Reseta estado do quarto para nova partida
+  // Inicializa os locais do quarto
+  _initializeLocations() {
+    this._locations.set("shelf", new Location(
+      texts.entities.locations.shelf.name,
+      texts.entities.locations.shelf.description,
+      false
+    ));
+    this._locations.set("bed", new Location(
+      texts.entities.locations.bed.name,
+      texts.entities.locations.bed.description,
+      true
+    ));
+    this._locations.set("closet", new Location(
+      texts.entities.locations.closet.name,
+      texts.entities.locations.closet.description,
+      true
+    ));
+    this._locations.set("window", new Location(
+      texts.entities.locations.window.name,
+      texts.entities.locations.window.description,
+      true
+    ));
+    this._locations.set("door", new Location(
+      texts.entities.locations.door.name,
+      texts.entities.locations.door.description,
+      true
+    ));
+    this._locations.set("chair", new Location(
+      texts.entities.locations.chair.name,
+      texts.entities.locations.chair.description,
+      false
+    ));
+  }
+
+  // Reseta estado do quarto para nova partida
   resetRun() {
-    this.lampBroken = false;
-    this.features = {
-      shelf: false,    // Se estante foi descoberta
-      bed: false,      // Se cama foi descoberta
-      closet: false,   // Se armário foi descoberto
-      window: false,   // Se janela foi descoberta
-      door: false,     // Se porta foi descoberta
-    };
+    this._lampBroken = false;
+    this._locations.forEach(location => {
+      location.discovered = false;  // Reset descoberta de cada local
+    });
   }
 
-// Marca objeto como descoberto
+  // ENCAPSULAMENTO: Getters e setters
+  get lampBroken() {
+    return this._lampBroken;
+  }
+
+  set lampBroken(value) {
+    this._lampBroken = value;
+  }
+
+  // POLIMORFISMO: Sobrescrita do método describe()
+  describe() {
+    const discoveredLocations = Array.from(this._locations.values())
+      .filter(loc => loc._discovered)
+      .map(loc => loc.name)
+      .join(", ");
+    return `${this._description}. Locais conhecidos: ${discoveredLocations || texts.ui.none}`;
+  }
+
+  // Marca objeto como descoberto
   discover(feature) {
-    this.features[feature] = true;
+    const location = this._locations.get(feature);
+    if (location) {
+      location.discovered = true;
+    }
   }
 
-// Verifica se objeto já foi descoberto
+  // Verifica se objeto já foi descoberto
   knows(feature) {
-    return Boolean(this.features[feature]);
+    const location = this._locations.get(feature);
+    return location ? location._discovered : false;
+  }
+
+  // Retorna um local específico
+  getLocation(feature) {
+    return this._locations.get(feature);
+  }
+
+  // Retorna todos os locais
+  get locations() {
+    return Array.from(this._locations.values());
+  }
+
+  // Verifica se um local é ponto de esconderijo
+  isHidingSpot(feature) {
+    const location = this._locations.get(feature);
+    return location ? location.isHidingSpot : false;
   }
 }
 
 // Gerencia IA do intruso e comportamento de busca
-class Intruder {
+// HERANÇA: Intruder herda de Entity
+class Intruder extends Entity {
   constructor() {
+    super(texts.entities.intruder.name, texts.entities.intruder.description);
     this.reset();
   }
 
-// Reseta estado do intruso para nova partida
+  // Reseta estado do intruso para nova partida
   reset() {
-    this.active = false;      // Se intruso está ativo no quarto
-    this.stunned = false;     // Se intruso está atordoado
-    this.plan = [];           // Plano de busca pelo quarto
-    this.planIndex = 0;       // Posição atual no plano
-    this.currentTarget = "door"; // Onde intruso está indo agora
-    this.alert = false;       // Se intruso está em estado de alerta
-    this.triedSwitch = false; // Se já tentou interruptor de luz
-    this.suspicion = 0;       // Nível de suspeita de ruído
+    this._active = false;        // Se intruso está ativo no quarto
+    this._stunned = false;       // Se intruso está atordoado
+    this._plan = [];             // Plano de busca pelo quarto
+    this._planIndex = 0;         // Posição atual no plano
+    this._currentTarget = "door"; // Onde intruso está indo agora
+    this._alert = false;         // Se intruso está em estado de alerta
+    this._triedSwitch = false;   // Se já tentou interruptor de luz
+    this._suspicion = 0;         // Nível de suspeita de ruído
+  }
+
+  // ENCAPSULAMENTO: Getters e setters
+  get active() {
+    return this._active;
+  }
+
+  get stunned() {
+    return this._stunned;
+  }
+
+  set stunned(value) {
+    this._stunned = value;
+  }
+
+  get currentTarget() {
+    return this._currentTarget;
+  }
+
+  get alert() {
+    return this._alert;
+  }
+
+  get suspicion() {
+    return this._suspicion;
+  }
+
+  // POLIMORFISMO: Sobrescrita do método describe()
+  describe() {
+    const state = this._stunned ? "atordoado" : this._alert ? "alerta" : "buscando";
+    return `${this._name} está ${state}, indo em direção a ${this._currentTarget}`;
+  }
+
+  // Compatibilidade com código antigo
+  get plan() {
+    return this._plan;
+  }
+
+  get planIndex() {
+    return this._planIndex;
+  }
+
+  get targetName() {
+    return this._currentTarget;
+  }
+
+  get previousTarget() {
+    if (this._planIndex > 0) {
+      return this._plan[this._planIndex - 1];
+    }
+    return null;
   }
 
 // Faz intruso entrar no quarto
   enter(game) {
-    this.active = true;
-    this.stunned = false;
+    this._active = true;
+    this._stunned = false;
 
     // Se jogador não se escondeu, morre imediatamente
     if (game.player.hiddenSpot === "chair") {
@@ -177,13 +534,13 @@ class Intruder {
       };
     }
 
-    this.plan = this.buildPlan(game);
-    this.planIndex = 0;
-    this.currentTarget = this.plan[0];
+    this._plan = this.buildPlan(game);
+    this._planIndex = 0;
+    this._currentTarget = this._plan[0];
 
     return {
       type: "arrival",
-      lines: game.narrator.intruderArrival(game, this.currentTarget),
+      lines: game.narrator.intruderArrival(game, this._currentTarget),
     };
   }
 
@@ -192,7 +549,7 @@ class Intruder {
     const plan = [];
 
     // Se a lâmpada está quebrada, intruso vai ao interruptor primeiro
-    if (game.room.lampBroken && !this.triedSwitch && hidden !== "chair") {
+    if (game.room.lampBroken && !this._triedSwitch && hidden !== "chair") {
       plan.push("lightSwitch");
     }
 
@@ -219,26 +576,26 @@ class Intruder {
 
 // Avança para próximo alvo no plano de busca
   advance() {
-    if (this.stunned) {
-      return this.currentTarget;
+    if (this._stunned) {
+      return this._currentTarget;
     }
 
-    this.planIndex = Math.min(this.planIndex + 1, this.plan.length - 1);
-    this.currentTarget = this.plan[this.planIndex];
-    return this.currentTarget;
+    this._planIndex = Math.min(this._planIndex + 1, this._plan.length - 1);
+    this._currentTarget = this._plan[this._planIndex];
+    return this._currentTarget;
   }
 
   step(game) {
     // Trata estágio do interruptor de luz
-    if (this.currentTarget === "lightSwitch") {
-      this.triedSwitch = true;
+    if (this._currentTarget === "lightSwitch") {
+      this._triedSwitch = true;
       if (game.room.lampBroken) {
-        this.alert = true;
-        this.suspicion += 2;
+        this._alert = true;
+        this._suspicion += 2;
       }
-      this.plan = this.buildPlan(game);
-      this.planIndex = 0;
-      this.currentTarget = this.plan[0];
+      this._plan = this.buildPlan(game);
+      this._planIndex = 0;
+      this._currentTarget = this._plan[0];
       return;
     }
 
@@ -249,22 +606,22 @@ class Intruder {
 // Registra ruído feito pelo jogador e aumenta suspeita
   registerNoise(game, actionKey) {
     const base = NOISE_COSTS[actionKey] ?? 1;
-    const bonus = this.alert ? 1 : 0;
-    this.suspicion += base + bonus;
+    const bonus = this._alert ? 1 : 0;
+    this._suspicion += base + bonus;
 
     // Se suspeita passa do limite, intruso vai direto ao jogador
-    const threshold = this.alert ? 3 : 5;
-    if (this.suspicion >= threshold && !this.stunned) {
+    const threshold = this._alert ? 3 : 5;
+    if (this._suspicion >= threshold && !this._stunned) {
       this.honeInOnPlayer(game);
-      this.suspicion = 0;
+      this._suspicion = 0;
     }
   }
 
 // Redireciona busca direto para posição do jogador
   honeInOnPlayer(game) {
-    this.plan = [game.player.hiddenSpot];
-    this.planIndex = 0;
-    this.currentTarget = this.plan[0];
+    this._plan = [game.player.hiddenSpot];
+    this._planIndex = 0;
+    this._currentTarget = this._plan[0];
     game.logLine(texts.intruderActions.noise);
   }
 
@@ -272,14 +629,14 @@ class Intruder {
   takeTurn(game, playerActionKey) {
     this.registerNoise(game, playerActionKey);
 
-    if (this.stunned) {
+    if (this._stunned) {
       return;
     }
 
-    const previousTarget = this.targetName;
+    const previousTarget = this._currentTarget;
 
     // Trata narração do interruptor de luz antes de avançar
-    if (this.currentTarget === "lightSwitch") {
+    if (this._currentTarget === "lightSwitch") {
       if (game.room.lampBroken) {
         game.logLine(texts.intruderActions.switchNothing);
         game.logLine(texts.intruderActions.switchNotices);
@@ -291,16 +648,11 @@ class Intruder {
     this.step(game);
 
     // Loga avanço do intruso se mudou de alvo
-    if (previousTarget !== this.targetName && this.targetName !== "lightSwitch") {
-      game.logLines(game.narrator.intruderAdvance(game, this.targetName));
+    if (previousTarget !== this._currentTarget && this._currentTarget !== "lightSwitch") {
+      game.logLines(game.narrator.intruderAdvance(game, this._currentTarget));
     }
 
     game.logLine(game.narrator.intruderPrompt(game));
-  }
-
-// Retorna nome do alvo atual do intruso
-  get targetName() {
-    return this.currentTarget;
   }
 }
 
@@ -329,37 +681,9 @@ class Narrator {
 // Gera texto de abertura do jogo
   opening(game) {
     const lines = [];
-    const knownCount = Object.values(game.knowledge).filter(Boolean).length;
-    lines.push(
-      knownCount > 0
-        ? texts.opening.repeat
-        : texts.opening.firstTime
-    );
-
-    if (game.room.lampBroken) {
-      lines.push(texts.opening.lampBroken);
-    } else {
-      lines.push(texts.opening.lampWorking);
-    }
-
-    lines.push(this.explorationPrompt(game));
+    lines.push(texts.opening.firstTime);
+    lines.push(texts.opening.prompt);
     return lines;
-  }
-
-// Gera prompt de exploração
-  explorationPrompt(game) {
-    const fragments = [];
-    if (!game.room.knows("shelf")) fragments.push("a estante");
-    if (!game.room.knows("bed")) fragments.push("a cama");
-    if (!game.room.knows("closet")) fragments.push("o guarda-roupa");
-    if (!game.room.knows("window")) fragments.push("a janela");
-    if (!game.room.knows("door")) fragments.push("a porta");
-
-    if (fragments.length === 0) {
-      return texts.opening.allExplored;
-    }
-
-    return texts.opening.remaining.replace("{fragments}", fragments.join(", "));
   }
 
 // Gera texto de descoberta de objeto
@@ -446,15 +770,17 @@ class Narrator {
 
 // Gera prompt de ação do intruso
   intruderPrompt(game) {
+    let prompt;
+
     if (game.intruder.stunned) {
-      return texts.intruderPrompt.stunned;
+      prompt = texts.intruderPrompt.stunned;
+    } else if (game.intruder.targetName === game.player.hiddenSpot) {
+      prompt = texts.intruderPrompt.atHidingSpot.replace("{target}", this.describeTargetAfterPreposition(game.player.hiddenSpot));
+    } else {
+      prompt = texts.intruderPrompt.goingToTarget.replace("{target}", this.describeTargetAsObject(game.intruder.targetName));
     }
 
-    if (game.intruder.targetName === game.player.hiddenSpot) {
-      return texts.intruderPrompt.atHidingSpot.replace("{target}", this.describeTargetAfterPreposition(game.player.hiddenSpot));
-    }
-
-    return texts.intruderPrompt.goingToTarget.replace("{target}", this.describeTargetAsObject(game.intruder.targetName));
+    return prompt + " " + texts.intruderPrompt.prompt;
   }
 
 // Gera narrativa de avanço do intruso
@@ -463,13 +789,6 @@ class Narrator {
       texts.intruderAdvance.moves
         .replace("{previousTarget}", this.describeTargetAsObject(game.intruder.previousTarget))
         .replace("{target}", this.describeTargetAsObject(target)),
-    ];
-  }
-
-// Gera narrativa quando intruso erra jogador
-  intruderMiss(game) {
-    return [
-      texts.intruderMiss.survives.replace("{previousTarget}", this.describeTargetAsObject(game.intruder.previousTarget)),
     ];
   }
 
@@ -546,13 +865,6 @@ class Narrator {
   }
 
 // Gera narrativa de falha na fuga pela porta
-  escapeDoorFailure(game) {
-    return [
-      texts.escapeDoorFailure.tries,
-      texts.escapeDoorFailure.fails,
-    ];
-  }
-
 // Gera narrativa de fuga pela janela bem-sucedida
   escapeWindowSuccess(game) {
     const lines = [];
@@ -575,9 +887,8 @@ class Narrator {
 
 // Define uma ação disponível no jogo
 class Action {
-  constructor({ key, slot, phases, cost, once, visible, label, run }) {
+  constructor({ key, phases, cost, once, visible, label, run }) {
     this.key = key;         // Identificador único da ação
-    this.slot = slot;       // Número da opção no menu
     this.phases = phases;   // Fases onde ação é disponível
     this.cost = cost;       // Tempo que consome
     this.once = once;       // Se só pode ser usada uma vez
@@ -606,47 +917,18 @@ class Action {
 // Controla fluxo principal do jogo
 class Game {
   constructor() {
-    this.knowledgeStore = new KnowledgeStore(DEFAULT_KNOWLEDGE);
-    this.knowledge = this.knowledgeStore.load();
+    this.knowledge = { ...DEFAULT_KNOWLEDGE };
     this.player = new Player();
     this.room = new Room();
     this.intruder = new Intruder();
     this.narrator = new Narrator();
+    this._firstRun = true;  // Flag para controlar primeira execução
     this.actions = this.createActions();
     this.actionMap = new Map(this.actions.map((action) => [action.key, action]));
     this.phase = "exploration";  // Fase atual: exploration ou intruder
     this.timeLeft = MAX_TIME;   // Tempo restante na fase de exploração
     this.gameOver = false;      // Se jogo terminou
     this.currentAction = null;  // Ação sendo executada agora
-
-    this.slotMaps = {
-      exploration: [  // Ações disponíveis na fase de exploração
-        "analyzeShelf",
-        "analyzeBed",
-        "analyzeCloset",
-        "analyzeDoor",
-        "analyzeWindow",
-        "wait",
-        "takeBat",
-        "takeSheet",
-        "breakLamp",
-        "hideBed",
-        "hideCloset",
-        "hideDoor",
-      ],
-      intruder: [  // Ações disponíveis na fase do intruso
-        "hideBed",
-        "hideCloset",
-        "hideDoor",
-        "openDoor",
-        "attack",
-        "switchHideout",
-        "useSheet",
-        "escapeWindow",
-        "recoverBat",
-        "goToDoor",
-      ],
-    };
 
     this.rl = readline.createInterface({  // Interface para entrada do jogador
       input: process.stdin,
@@ -661,17 +943,6 @@ class Game {
     // Combina ações das duas fases e converte para objetos Action
     const allActionData = [...phase1Actions, ...phase2Actions];
     return allActionData.map(actionData => new Action(actionData));
-  }
-
-// Retorna as chaves de ações da fase atual
-  currentSlotKeys() {
-    return this.slotMaps[this.phase];
-  }
-
-// Retorna ação pelo número da opção
-  getActionBySlot(slot) {
-    const key = this.currentSlotKeys()[slot - 1];
-    return key ? this.actionMap.get(key) : null;
   }
 
 // Retorna ação pelo identificador
@@ -726,11 +997,9 @@ class Game {
 
 // Filtra ações visíveis na fase atual
   getVisibleActions() {
-    const keys = this.currentSlotKeys();
     const visible = [];
-    keys.forEach((key) => {
-      const action = this.getAction(key);
-      if (action && action.isVisible(this)) {
+    this.actions.forEach((action) => {
+      if (action.phases.includes(this.phase) && action.isVisible(this)) {
         visible.push(action);
       }
     });
@@ -753,8 +1022,19 @@ class Game {
     this.intruder.reset();
     this.resetActionUsage();
     
-    // Mantém posição escondida entre partidas para continuidade
-    this.logLines(this.narrator.opening(this));
+    // Reseta estados de janela
+    this.knowledge.windowOpen = false;
+    this.knowledge.windowBroken = false;
+    
+    // Só mostra mensagem de abertura na primeira vez
+    if (this._firstRun) {
+      this.logLines(this.narrator.opening(this));
+      this._firstRun = false;
+    } else {
+      this.logLine(texts.opening.repeat);
+      this.logLine(texts.opening.prompt);
+    }
+    
     this.renderClock();
     this.renderChoices();
     this.promptInput();
@@ -804,19 +1084,17 @@ class Game {
     if (current === this.player.hiddenSpot) {
       if (this.player.coveredWithSheet) {
         this.player.coveredWithSheet = false;
-        this.intruder.previousTarget = current;
         const next = this.intruder.advance();
         return;
       }
 
       this.endGame([
         `Ele chega exatamente à ${this.narrator.describeTarget(this.player.hiddenSpot)}.`,
-        "Você não tem tempo para outro movimento.",
+        texts.errors.noTime,
       ]);
       return;
     }
 
-    this.intruder.previousTarget = current;
     this.intruder.advance();
   }
 
@@ -949,7 +1227,11 @@ class Game {
       return;
     }
 
-    this.player.hasSheet = false;
+    // Remove o lençol do inventário
+    const sheetItem = this.player.inventory.items.find(item => item.name === texts.entities.items.sheet.name);
+    if (sheetItem) {
+      this.player.removeItem(sheetItem.id);
+    }
     this.logLine(texts.playerActions.throwSheet);
     
     if (this.intruder.stunned) {
@@ -1085,4 +1367,22 @@ class Game {
   }
 }
 
-const game = new Game();
+// Só executa o jogo se este for o módulo principal
+if (require.main === module) {
+  const game = new Game();
+}
+
+// Exporta classes para reuso em testes ou outros contextos
+module.exports = {
+  Game,
+  Player,
+  Room,
+  Intruder,
+  Narrator,
+  Entity,
+  Item,
+  Weapon,
+  Tool,
+  Inventory,
+  Location,
+};

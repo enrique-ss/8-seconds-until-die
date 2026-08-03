@@ -1,5 +1,4 @@
 // Arquivo de textos do jogo - separados para facilitar edição
-
 module.exports = {
   // Descrições de locais
   locations: {
@@ -41,35 +40,62 @@ module.exports = {
 
   // Textos de abertura
   opening: {
-    firstTime: "Você acorda em um quarto fechado. Você tem apenas 8 segundos antes que alguém entre.",
-    repeat: "Você acorda no mesmo quarto de sempre, mas ele já não parece totalmente desconhecido.",
-    lampBroken: "A escuridão já toma parte do espaço; as bordas das coisas parecem instáveis.",
-    lampWorking: "A luz ainda revela o contorno das coisas que você talvez não consiga tocar por muito tempo.",
-    allExplored: "Tudo ao redor já foi tocado pelo seu olhar. O que você faz agora?",
-    remaining: "Ainda restam {fragments} à sua volta. O que você faz?",
+    firstTime: "Você acorda em um quarto fechado. Tem 8 segundos antes que alguém entre.",
+    repeat: "Você acorda no mesmo quarto.",
+    lampBroken: "A escuridão toma o espaço.",
+    lampWorking: "A luz revela os contornos do quarto.",
+    allExplored: "Você já conhece tudo aqui.",
+    remaining: "Você olha ao redor e vê {fragments} por explorar.",
+    prompt: "O que você faz?",
   },
 
   // Textos de descoberta
   discovery: {
-    shelf: "Você confere a estante e encontrou um taco. Talvez seja útil.",
-    bedWithSheet: "A cama oferece espaço embaixo e o lençol que pode abafar seus movimentos.",
-    bedWithoutSheet: "A cama mostra um vazio embaixo dela e um lençol dobrado ao alcance da mão.",
-    closet: "O guarda-roupa cabe um corpo, mas a madeira avisa que não vai guardar silêncio de graça.",
-    windowBroken: "Na sombra, a janela parece mais frágil do que antes.",
-    windowWorking: "A janela está ali, esperando alguém decidir se ela é saída ou armadilha.",
-    door: "A porta parece o tipo de saída que só funciona no segundo exato.",
+    shelf: "Você encontra um taco na estante.",
+    bedWithSheet: "A cama tem espaço embaixo e um lençol.",
+    bedWithoutSheet: "A cama tem espaço embaixo e um lençol dobrado.",
+    closet: "O guarda-roupa cabe um corpo, mas a madeira pode ranger.",
+    windowBroken: "A janela parece frágil na sombra.",
+    windowWorking: "A janela está intacta.",
+    door: "A porta parece uma saída possível.",
+  },
+
+  // Textos de abrir porta
+  openDoor: {
+    success: "Você abre a porta.",
+    alreadyOpen: "A porta já está aberta.",
+  },
+
+  // Textos de abrir janela
+  openWindow: {
+    locked: "A janela está trancada.",
+    alreadyOpen: "A janela já está aberta.",
+    alreadyBroken: "A janela já está quebrada.",
+  },
+
+  // Textos de quebrar janela
+  breakWindow: {
+    success: "Você quebra a janela com o taco.",
+    noBat: "Você não tem nada para quebrar a janela.",
+    alreadyBroken: "A janela já está quebrada.",
+  },
+
+  // Textos de morte por abrir porta
+  deathByDoor: {
+    manRuns: "Um homem corre em sua direção.",
+    shootsChest: "Ele te acerta com um tiro no peito.",
   },
 
   // Textos de pegar itens
   take: {
-    bat: "Você pega o taco de beisebol da estante.",
-    sheet: "Você puxa o lençol da cama e o peso do tecido vira mais uma possibilidade.",
+    bat: "Você pega o taco.",
+    sheet: "Você pega o lençol.",
   },
 
   // Textos de quebrar lâmpada
   breakLamp: {
-    alreadyBroken: "O vidro já não segura a luz; o quarto inteiro fica com bordas duras e sombras curtas.",
-    breaking: "O vidro estoura no teto e a luz se quebra junto com ele.",
+    alreadyBroken: "A lâmpada já está quebrada.",
+    breaking: "Você quebra a lâmpada.",
   },
 
   // Textos de morte quando exposto
@@ -77,138 +103,139 @@ module.exports = {
     knobTurns: "A maçaneta gira.",
     manEnters: "Um homem entra no quarto",
     actions: {
-      analyzeShelf: "vê você vasculhando a estante e dispara sem remorso.",
-      analyzeBed: "vê você examinando a cama e dispara sem hesitação.",
-      analyzeCloset: "vê você inspecionando o guarda-roupa e dispara friamente.",
-      analyzeDoor: "vê você estudando a porta e dispara sem piedade.",
-      analyzeWindow: "vê você olhando pela janela e dispara impiedosamente.",
-      takeBat: "vê você pegando o taco e dispara antes que você possa reagir.",
-      takeSheet: "vê você pegando o lençol e dispara sem compaixão.",
-      breakLamp: "vê você com o taco erguido e dispara sem dar chance.",
-      default: "vê você sentado na cadeira e dispara em seu peito.",
+      analyzeShelf: "e te vê. Ele atira.",
+      analyzeBed: "e te vê. Ele atira.",
+      analyzeCloset: "e te vê. Ele atira.",
+      analyzeDoor: "e te vê. Ele atira.",
+      analyzeWindow: "e te vê. Ele atira.",
+      takeBat: "e te vê. Ele atira.",
+      takeSheet: "e te vê. Ele atira.",
+      breakLamp: "e te vê. Ele atira.",
+      default: "e te vê. Ele atira.",
     },
-    lampBroken: "Na sombra, o disparo parece ainda mais seco.",
+    lampBroken: "Na escuridão, o disparo ecoa.",
   },
 
   // Textos de chegada do intruso
   intruderArrival: {
-    enters: "Um homem entra no quarto, furioso.",
-    movesTo: "Ele varre o espaço à sua volta e segue em direção {target}, deixando {hiddenSpot} fora do primeiro olhar.",
-    stopsAtHiding: "O corpo dele para exatamente diante do seu esconderijo.",
+    enters: "Um homem entra no quarto.",
+    movesTo: "Ele vai em direção {target}, ignorando {hiddenSpot}.",
+    stopsAtHiding: "Ele para diante do seu esconderijo.",
   },
 
   // Textos de prompt do intruso
   intruderPrompt: {
-    stunned: "Ele cambaleia. Agora é a sua chance. O que você faz?",
-    atHidingSpot: "Ele está diante {target}. O que você faz?",
-    goingToTarget: "Ele vai até {target}. O que você faz?",
+    stunned: "Ele está atordoado.",
+    atHidingSpot: "Ele está diante {target}.",
+    goingToTarget: "Ele vai até {target}.",
+    prompt: "O que você faz?",
   },
 
   // Textos de avanço do intruso
   intruderAdvance: {
-    moves: "Ele deixa {previousTarget} para trás e se move até {target}.",
+    moves: "Ele se move de {previousTarget} para {target}.",
   },
 
   // Textos quando intruso erra jogador
   intruderMiss: {
-    survives: "Sua cobertura sustenta o primeiro olhar dele enquanto ele passa por {previousTarget}.",
+    survives: "Ele passa por {previousTarget} sem te ver.",
   },
 
   // Textos de se esconder
   hide: {
-    bedWithSheet: "Você se afunda sob a cama e o lençol ajuda a dissolver sua silhueta.",
-    bedWithoutSheet: "Você se arrasta para debaixo da cama, tentando ocupar o mínimo de espaço possível.",
-    closet: "Você se encolhe dentro do guarda-roupa. A madeira reclama, mas ainda aguenta.",
-    door: "Você se coloca atrás da porta, usando o vão como seu escudo.",
-    chair: "Você permanece parado, esperando a próxima brecha.",
+    bedWithSheet: "Você se esconde sob a cama com o lençol.",
+    bedWithoutSheet: "Você se esconde sob a cama.",
+    closet: "Você se esconde no guarda-roupa.",
+    door: "Você se esconde atrás da porta.",
+    chair: "Você permanece na cadeira.",
   },
 
   // Textos de usar lençol
   sheet: {
-    bed: "O lençol cai sobre você e a cama deixa de parecer um lugar fácil de vasculhar.",
-    chair: "O lençol encobre seu corpo de um jeito improvisado, como se fosse uma cortina mal amarrada.",
-    door: "O lençol se estende atrás da porta, disfarçando sua silhueta contra a madeira.",
-    default: "O lençol não resolve tudo, mas muda a textura da sua presença no quarto.",
+    bed: "Você se cobre com o lençol.",
+    chair: "Você se cobre com o lençol.",
+    door: "Você se cobre com o lençol.",
+    default: "Você se cobre com o lençol.",
   },
 
   // Textos de atordoamento bem-sucedido
   stunSuccess: {
-    hit: "O taco encontra o homem antes que ele entenda de onde veio o golpe.",
-    reaction: "Ele perde o eixo por um instante e o revólver desce com a mão vacilando.",
-    lampBroken: "Na penumbra, o corpo dele demora ainda mais para recuperar forma.",
-    exposed: "Agora ele está exposto o suficiente para você tentar sair.",
+    hit: "Você acerta o homem.",
+    reaction: "Ele perde o equilíbrio.",
+    lampBroken: "Na escuridão, ele demora a se recuperar.",
+    exposed: "Ele está vulnerável.",
   },
 
   // Textos de falha no atordoamento
   stunFailure: {
-    miss: "Seu golpe não encontra a abertura certa.",
-    reaction: "Ele reage antes da sua intenção virar vantagem.",
-    consequence: "O quarto encolhe ao redor do erro.",
+    miss: "Você erra o golpe.",
+    reaction: "Ele desvia.",
+    consequence: "Ele reage.",
   },
 
   // Textos de fuga pela porta bem-sucedida
   escapeDoorSuccess: {
-    opens: "Você gira a maçaneta e o corredor se abre à sua frente.",
-    stunned: "Atrás de você, o homem ainda tenta recompor o corpo.",
-    distracted: "Ele está ocupado demais em {target} para alcançar você a tempo.",
-    escapes: "Você cruza a porta antes que o quarto consiga te prender de novo.",
+    opens: "Você abre a porta.",
+    stunned: "O homem ainda está atordoado.",
+    distracted: "Ele está ocupado com {target}.",
+    escapes: "Você sai pelo corredor.",
   },
 
   // Textos de falha na fuga pela porta
   escapeDoorFailure: {
-    tries: "Você tenta abrir a porta, mas ele já está perto demais.",
-    fails: "O corredor desaparece antes que você consiga atravessá-lo.",
+    tries: "Você tenta abrir a porta, mas ele está perto.",
+    fails: "Não consegue escapar.",
   },
 
   // Textos de fuga pela janela bem-sucedida
   escapeWindowSuccess: {
-    breaks: "A janela cede sob sua mão.",
-    jumps: "Você se joga para fora antes que o homem termine de chegar até você.",
-    lampBroken: "A queda parece mais curta na escuridão.",
+    breaks: "Você quebra a janela.",
+    jumps: "Você pula para fora.",
+    lampBroken: "Você pula na escuridão.",
   },
 
   // Textos de falha na fuga pela janela
   escapeWindowFailure: {
-    tooSlow: "A janela não abre no segundo que você precisava.",
-    tooLate: "Quando o vidro enfim cede, já é tarde demais para transformar isso em fuga.",
+    tooSlow: "A janela não abre a tempo.",
+    tooLate: "É tarde demais para fugir.",
   },
 
   // Textos de ações do intruso
   intruderActions: {
     switchNothing: "Ele aciona o interruptor. Nada acontece.",
-    switchNotices: "Ele nota os cacos no chão e o corpo se enrijece.",
-    switchLights: "Ele aciona o interruptor e o quarto se ilumina.",
-    noise: "Um barulho o faz virar a cabeça na sua direção.",
+    switchNotices: "Ele nota os cacos no chão.",
+    switchLights: "Ele aciona a luz.",
+    noise: "Ele ouve um som e olha na sua direção.",
   },
 
   // Textos de ações do jogador
   playerActions: {
-    wait: "Você espera no lugar.",
-    recoverBat: "Você firma o taco com mais força e espera a próxima abertura.",
-    goToDoor: "Você se move em direção à porta.",
-    throwSheet: "Você joga o lençol em direção ao intruso.",
-    sheetDistracts: "O lençol voa na direção dele e ele se distrai por um instante.",
-    sheetAlreadyStunned: "Ele já está desequilibrado. O lençol só confunde mais a situação.",
-    noSheet: "Você procura o lençol, mas ele não está com você.",
-    stunnedAlready: "Ele já está desequilibrado. Seu golpe só reforça a chance de fuga.",
-    stunnedWaiting: "Ele ainda está cambaleando. Esperar agora só compra mais um instante.",
+    wait: "Você espera.",
+    goToDoor: "Você vai para a porta.",
+    throwSheet: "Você joga o lençol nele.",
+    sheetDistracts: "Ele se distrai com o lençol.",
+    sheetAlreadyStunned: "Ele já está atordoado.",
+    noSheet: "Você não tem o lençol.",
+    stunnedAlready: "Ele já está atordoado.",
+    stunnedWaiting: "Ele ainda está atordoado.",
   },
 
   // Textos de erro
   errors: {
     invalidOption: "Opção inválida.",
-    invalidNumber: "Por favor, digite um número válido.",
-    dontKnowSpot: "Você tenta se mover, mas ainda não conhece bem esse lugar.",
-    dontKnowPath: "Você tenta trocar de lugar, mas o caminho não está claro o bastante.",
-    dontKnowWindow: "A janela ainda não está clara o bastante na sua mente.",
-    caughtMoving: "Você se mexe para {spot}, mas ele já está olhando exatamente para lá.",
-    movementDenounces: "O movimento te denuncia.",
-    caughtSwitching: "Ao mudar para {spot}, você cai direto no olhar dele.",
-    switchDenounces: "A troca de posição te entrega.",
-    doorAlerts: "Você gira a maçaneta, mas o rangido da porta denuncia sua posição.",
-    shootsAtSound: "Mesmo no escuro, ele atira na direção do som.",
-    muzzleFlashes: "Os clarões das balas iluminam o quarto por um instante.",
-    fallsBeforeEscape: "Você cai antes de conseguir sair.",
+    invalidNumber: "Digite um número válido.",
+    dontKnowSpot: "Você não conhece esse lugar.",
+    dontKnowPath: "O caminho não está claro.",
+    dontKnowWindow: "Você não conhece a janela.",
+    caughtMoving: "Ele te vê se movendo para {spot}.",
+    movementDenounces: "O movimento te expôs.",
+    caughtSwitching: "Ele te vê mudando para {spot}.",
+    switchDenounces: "A troca te expôs.",
+    doorAlerts: "A porta range e ele te ouve.",
+    shootsAtSound: "Ele atira na direção do som.",
+    muzzleFlashes: "Os clarões iluminam o quarto.",
+    fallsBeforeEscape: "Você cai antes de escapar.",
+    noTime: "Você não tem tempo para outro movimento.",
   },
 
   // Textos de UI
@@ -219,6 +246,7 @@ module.exports = {
     playAgain: "Deseja jogar novamente? (s/n): ",
     thanks: "Obrigado por jogar!",
     gameOver: "--- FIM DE JOGO ---",
+    none: "Nenhum",
   },
 
   // Labels de ações
@@ -236,11 +264,64 @@ module.exports = {
     hideCloset: "Esconder-se: armário",
     hideDoor: "Esconder-se: atrás da porta",
     openDoor: "Abrir a porta",
+    openWindow: "Abrir a janela",
+    breakWindow: "Quebrar janela",
     attack: "Bater: taco",
     useSheet: "Jogar lençol",
     switchHideout: "Esconder-se: trocar de lugar",
     escapeWindow: "Fugir: janela",
-    recoverBat: "Permanecer pronto",
     goToDoor: "Ir para porta",
+  },
+
+  // Descrições de entidades para classes POO
+  entities: {
+    player: {
+      name: "Jogador",
+      description: "Você está tentando sobreviver",
+    },
+    intruder: {
+      name: "Intruso",
+      description: "Um homem armado e perigoso",
+    },
+    room: {
+      name: "Quarto",
+      description: "Um quarto fechado e escuro",
+    },
+    locations: {
+      shelf: {
+        name: "Estante",
+        description: "Uma estante de madeira",
+      },
+      bed: {
+        name: "Cama",
+        description: "Uma cama com espaço embaixo",
+      },
+      closet: {
+        name: "Guarda-roupa",
+        description: "Um guarda-roupa grande",
+      },
+      window: {
+        name: "Janela",
+        description: "Uma janela quebrável",
+      },
+      door: {
+        name: "Porta",
+        description: "Uma porta de saída",
+      },
+      chair: {
+        name: "Cadeira",
+        description: "Uma cadeira no centro",
+      },
+    },
+    items: {
+      bat: {
+        name: "Taco de beisebol",
+        description: "Um taco de beisebol",
+      },
+      sheet: {
+        name: "Lençol",
+        description: "Um lençol para se cobrir",
+      },
+    },
   },
 };

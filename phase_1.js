@@ -4,7 +4,6 @@ const texts = require('./texts.js');
 module.exports = [
   {
     key: "analyzeShelf",
-    slot: 1,
     phases: ["exploration"],
     cost: 2.8,
     once: true,
@@ -14,13 +13,11 @@ module.exports = [
       game.room.discover("shelf");
       game.knowledge.shelfExamined = true;
       game.knowledge.batKnown = true;
-      game.knowledgeStore.save(game.knowledge);
       game.logLines(game.narrator.discoveryLine("shelf", game));
     },
   },
   {
     key: "analyzeBed",
-    slot: 2,
     phases: ["exploration"],
     cost: 2.4,
     once: true,
@@ -31,13 +28,11 @@ module.exports = [
       game.knowledge.bedExamined = true;
       game.knowledge.sheetKnown = true;
       game.knowledge.bedHidingKnown = true;
-      game.knowledgeStore.save(game.knowledge);
       game.logLines(game.narrator.discoveryLine("bed", game));
     },
   },
   {
     key: "analyzeCloset",
-    slot: 3,
     phases: ["exploration"],
     cost: 2.6,
     once: true,
@@ -47,13 +42,11 @@ module.exports = [
       game.room.discover("closet");
       game.knowledge.closetExamined = true;
       game.knowledge.closetHidingKnown = true;
-      game.knowledgeStore.save(game.knowledge);
       game.logLines(game.narrator.discoveryLine("closet", game));
     },
   },
   {
     key: "analyzeDoor",
-    slot: 4,
     phases: ["exploration"],
     cost: 2.0,
     once: true,
@@ -63,13 +56,25 @@ module.exports = [
       game.room.discover("door");
       game.knowledge.doorHeard = true;
       game.knowledge.doorHidingKnown = true;
-      game.knowledgeStore.save(game.knowledge);
       game.logLines(game.narrator.discoveryLine("door", game));
     },
   },
   {
+    key: "openDoor",
+    phases: ["exploration"],
+    cost: 1.5,
+    once: true,
+    visible: (game) => game.knowledge.doorHeard,
+    label: () => texts.actionLabels.openDoor,
+    run: (game) => {
+      game.endGame([
+        texts.deathByDoor.manRuns,
+        texts.deathByDoor.shootsChest,
+      ]);
+    },
+  },
+  {
     key: "analyzeWindow",
-    slot: 5,
     phases: ["exploration"],
     cost: 2.2,
     once: true,
@@ -79,13 +84,34 @@ module.exports = [
       game.room.discover("window");
       game.knowledge.windowSeen = true;
       game.knowledge.windowHidingKnown = true;
-      game.knowledgeStore.save(game.knowledge);
       game.logLines(game.narrator.discoveryLine("window", game));
     },
   },
   {
+    key: "openWindow",
+    phases: ["exploration"],
+    cost: 1.5,
+    once: true,
+    visible: (game) => game.knowledge.windowSeen && !game.knowledge.windowOpen && !game.knowledge.windowBroken,
+    label: () => texts.actionLabels.openWindow,
+    run: (game) => {
+      game.logLine(texts.openWindow.locked);
+    },
+  },
+  {
+    key: "breakWindow",
+    phases: ["exploration"],
+    cost: 2.0,
+    once: true,
+    visible: (game) => game.knowledge.windowSeen && game.player.hasBat && !game.knowledge.windowBroken,
+    label: () => texts.actionLabels.breakWindow,
+    run: (game) => {
+      game.knowledge.windowBroken = true;
+      game.logLine(texts.breakWindow.success);
+    },
+  },
+  {
     key: "wait",
-    slot: 6,
     phases: ["exploration", "intruder"],
     cost: 0,
     once: true,
@@ -105,7 +131,6 @@ module.exports = [
   },
   {
     key: "takeBat",
-    slot: 7,
     phases: ["exploration"],
     cost: 2.0,
     once: true,
@@ -113,13 +138,11 @@ module.exports = [
     label: () => texts.actionLabels.takeBat,
     run: (game) => {
       game.player.gain("hasBat");
-      game.knowledgeStore.save(game.knowledge);
       game.logLine(game.narrator.takeLine("bat"));
     },
   },
   {
     key: "takeSheet",
-    slot: 8,
     phases: ["exploration"],
     cost: 2.0,
     once: true,
@@ -127,13 +150,11 @@ module.exports = [
     label: () => texts.actionLabels.takeSheet,
     run: (game) => {
       game.player.gain("hasSheet");
-      game.knowledgeStore.save(game.knowledge);
       game.logLine(game.narrator.takeLine("sheet"));
     },
   },
   {
     key: "breakLamp",
-    slot: 9,
     phases: ["exploration"],
     cost: 2.4,
     once: true,
@@ -146,7 +167,6 @@ module.exports = [
   },
   {
     key: "hideBed",
-    slot: 1,
     phases: ["exploration", "intruder"],
     cost: 1.5,
     once: true,
@@ -163,7 +183,6 @@ module.exports = [
   },
   {
     key: "hideCloset",
-    slot: 2,
     phases: ["exploration", "intruder"],
     cost: 1.5,
     once: true,
@@ -180,7 +199,6 @@ module.exports = [
   },
   {
     key: "hideDoor",
-    slot: 3,
     phases: ["exploration", "intruder"],
     cost: 1.0,
     once: true,
