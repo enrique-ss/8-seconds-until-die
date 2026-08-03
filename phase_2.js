@@ -29,7 +29,7 @@ module.exports = [
     phases: ["intruder"],
     cost: 0,
     once: false,
-    visible: () => true,
+    visible: (game) => !game.intruder.distracted,
     label: () => texts.actionLabels.switchHideout,
     run: (game) => {
       const spots = ["bed", "closet", "door"];
@@ -65,10 +65,32 @@ module.exports = [
     phases: ["intruder"],
     cost: 0,
     once: false,
-    visible: () => true,
+    visible: (game) => !game.intruder.distracted,
     label: () => texts.actionLabels.goToDoor,
     run: (game) => {
       game.resolveGoToDoor();
+    },
+  },
+  {
+    key: "quickAttack",
+    phases: ["intruder"],
+    cost: 0,
+    once: true,
+    visible: (game) => game.intruder.distracted && game.player.hasBat,
+    label: () => "Ataque rápido",
+    run: (game) => {
+      game.resolveQuickAttack();
+    },
+  },
+  {
+    key: "quickEscape",
+    phases: ["intruder"],
+    cost: 0,
+    once: true,
+    visible: (game) => game.intruder.distracted && game.knowledge.windowHidingKnown,
+    label: () => "Fuga rápida",
+    run: (game) => {
+      game.resolveQuickEscape();
     },
   },
 ];

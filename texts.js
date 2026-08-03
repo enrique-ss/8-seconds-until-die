@@ -132,21 +132,20 @@ module.exports = {
   // Textos de chegada do intruso
   intruderArrival: {
     enters: "Um homem entra no quarto.",
-    movesTo: "Ele vai em direção {target}, ignorando {hiddenSpot}.",
+    entersWithWeapon: "Um homem entra no quarto, armado.",
+    headsTo: "Ele vai em direção {target}.",
     stopsAtHiding: "Ele para diante do seu esconderijo.",
   },
 
   // Textos de prompt do intruso
   intruderPrompt: {
-    stunned: "Ele está atordoado.",
-    atHidingSpot: "Ele está diante {target}.",
-    goingToTarget: "Ele vai até {target}.",
-    prompt: "O que você faz?",
+    stunned: "Ele está atordoado. O que você faz?",
+    goingToTarget: "Ele vai até {target}. O que você faz?",
   },
 
   // Textos de avanço do intruso
   intruderAdvance: {
-    moves: "Ele se move de {previousTarget} para {target}.",
+    moves: "Ele vai em direção {target}.",
   },
 
   // Textos quando intruso erra jogador
@@ -216,9 +215,18 @@ module.exports = {
   // Textos de ações do intruso
   intruderActions: {
     switchNothing: "Ele aciona o interruptor. Nada acontece.",
-    switchNotices: "Ele nota os cacos no chão.",
+    switchNotices: "Ele nota algo estranho.",
     switchLights: "Ele aciona a luz.",
     noise: "Ele ouve um som e olha na sua direção.",
+    noticesGlass: "Ele para ao ver os cacos de vidro no chão.",
+    confusedLight: "Ele parece confuso com a luz que não acende.",
+  },
+
+  // Textos de distração do intruso
+  distraction: {
+    brokenLight: "Ele está confuso com a luz que não funciona. Você tem uma brecha.",
+    brokenWindow: "Ele está examinando os cacos de vidro. Você tem uma brecha.",
+    prompt: "O que você faz?",
   },
 
   // Textos de ações do jogador

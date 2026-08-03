@@ -190,6 +190,8 @@ const NOISE_COSTS = {
   breakLamp: 3,
   breakWindow: 2,
   openWindow: 1,
+  quickAttack: 1,
+  quickEscape: 2,
 };
 
 // Códigos de cores ANSI para o terminal
@@ -468,6 +470,8 @@ class Intruder extends Entity {
     this._alert = false;         // Se intruso está em estado de alerta
     this._triedSwitch = false;   // Se já tentou interruptor de luz
     this._suspicion = 0;         // Nível de suspeita de ruído
+    this._distracted = false;    // Se intruso está distraído
+    this._distractionSource = null; // Fonte da distração
   }
 
   // ENCAPSULAMENTO: Getters e setters
@@ -493,6 +497,22 @@ class Intruder extends Entity {
 
   get suspicion() {
     return this._suspicion;
+  }
+
+  get distracted() {
+    return this._distracted;
+  }
+
+  get distractionSource() {
+    return this._distractionSource;
+  }
+
+  set distracted(value) {
+    this._distracted = value;
+  }
+
+  set distractionSource(value) {
+    this._distractionSource = value;
   }
 
   // POLIMORFISMO: Sobrescrita do método describe()
@@ -540,7 +560,7 @@ class Intruder extends Entity {
 
     return {
       type: "arrival",
-      lines: game.narrator.intruderArrival(game, this._currentTarget),
+      lines: game.narrator.intruderArrival(game, this._currentTarget, game.player.hiddenSpot),
     };
   }
 
@@ -553,23 +573,25 @@ class Intruder extends Entity {
       plan.push("lightSwitch");
     }
 
-    // Define ordem de busca baseada na posição do jogador
-    if (hidden === "bed") {
-      plan.push("closet");
-    } else if (hidden === "closet") {
-      plan.push("bed");
-    } else if (hidden === "door") {
-      plan.push("closet");
-    } else {
-      plan.push("closet");
-    }
+    // Intruso vai direto para onde o jogador está escondido
+    // a menos que haja distrações importantes
+    plan.push(hidden);
 
-    if (game.room.knows("window")) {
+    // Se a janela está quebrada e o jogador não está lá, intruso pode se distrair depois
+    if (game.knowledge.windowBroken && hidden !== "window") {
       plan.push("window");
     }
 
-    plan.push("door");
-    plan.push(hidden);
+    // Se o jogador está na porta, intruso pode checar outros lugares primeiro
+    if (hidden === "door") {
+      plan.push("closet");
+      plan.push("bed");
+    }
+
+    // Adiciona porta ao plano se não for o esconderijo
+    if (hidden !== "door") {
+      plan.push("door");
+    }
 
     return [...new Set(plan)];
   }
@@ -579,6 +601,10 @@ class Intruder extends Entity {
     if (this._stunned) {
       return this._currentTarget;
     }
+
+    // Reseta distração ao avançar
+    this._distracted = false;
+    this._distractionSource = null;
 
     this._planIndex = Math.min(this._planIndex + 1, this._plan.length - 1);
     this._currentTarget = this._plan[this._planIndex];
@@ -640,8 +666,21 @@ class Intruder extends Entity {
       if (game.room.lampBroken) {
         game.logLine(texts.intruderActions.switchNothing);
         game.logLine(texts.intruderActions.switchNotices);
+        // Intruso se distrai com a luz que não funciona
+        this._distracted = true;
+        this._distractionSource = "brokenLight";
       } else {
         game.logLine(texts.intruderActions.switchLights);
+      }
+    }
+
+    // Trata distração com janela quebrada
+    if (this._currentTarget === "window" && game.knowledge.windowBroken) {
+      game.logLine(texts.intruderActions.noticesGlass);
+      // Intruso se distrai com os cacos de vidro apenas se não for o esconderijo do jogador
+      if (game.player.hiddenSpot !== "window") {
+        this._distracted = true;
+        this._distractionSource = "brokenWindow";
       }
     }
 
@@ -649,10 +688,18 @@ class Intruder extends Entity {
 
     // Loga avanço do intruso se mudou de alvo
     if (previousTarget !== this._currentTarget && this._currentTarget !== "lightSwitch") {
-      game.logLines(game.narrator.intruderAdvance(game, this._currentTarget));
+      // Só narra se for o primeiro movimento ou se for significativo
+      if (previousTarget === "door" || this._planIndex === 1) {
+        game.logLine(game.narrator.intruderAdvance(game, this._currentTarget));
+      }
     }
 
-    game.logLine(game.narrator.intruderPrompt(game));
+    // Se intruso está distraído, dá oportunidade ao jogador
+    if (this._distracted) {
+      game.logLine(game.narrator.distractionPrompt(this._distractionSource));
+    } else {
+      game.logLine(game.narrator.intruderPrompt(game));
+    }
   }
 }
 
@@ -750,46 +797,40 @@ class Narrator {
   }
 
 // Gera narrativa de chegada do intruso
-  intruderArrival(game, target) {
+  intruderArrival(game, target, hiddenSpot) {
     const lines = [];
-    const hiddenSpot = this.describeSpot(game.player.hiddenSpot);
+    const spotName = this.describeSpot(hiddenSpot);
 
-    lines.push(texts.intruderArrival.enters);
+    lines.push(texts.intruderArrival.entersWithWeapon);
     lines.push(
-      texts.intruderArrival.movesTo
+      texts.intruderArrival.headsTo
         .replace("{target}", this.describeTargetAfterPreposition(target))
-        .replace("{hiddenSpot}", hiddenSpot)
     );
 
-    if (target === game.player.hiddenSpot) {
-      lines.push(texts.intruderArrival.stopsAtHiding);
-    }
+    return lines;
+  }
 
+// Gera prompt quando intruso está distraído
+  distractionPrompt(source) {
+    const lines = [];
+    lines.push(texts.distraction[source] || texts.distraction.brokenLight);
+    lines.push(texts.distraction.prompt);
     return lines;
   }
 
 // Gera prompt de ação do intruso
   intruderPrompt(game) {
-    let prompt;
-
     if (game.intruder.stunned) {
-      prompt = texts.intruderPrompt.stunned;
-    } else if (game.intruder.targetName === game.player.hiddenSpot) {
-      prompt = texts.intruderPrompt.atHidingSpot.replace("{target}", this.describeTargetAfterPreposition(game.player.hiddenSpot));
-    } else {
-      prompt = texts.intruderPrompt.goingToTarget.replace("{target}", this.describeTargetAsObject(game.intruder.targetName));
+      return texts.intruderPrompt.stunned;
     }
-
-    return prompt + " " + texts.intruderPrompt.prompt;
+    return texts.intruderPrompt.goingToTarget
+      .replace("{target}", this.describeTargetAsObject(game.intruder.targetName));
   }
 
 // Gera narrativa de avanço do intruso
   intruderAdvance(game, target) {
-    return [
-      texts.intruderAdvance.moves
-        .replace("{previousTarget}", this.describeTargetAsObject(game.intruder.previousTarget))
-        .replace("{target}", this.describeTargetAsObject(target)),
-    ];
+    return texts.intruderAdvance.moves
+      .replace("{target}", this.describeTargetAsObject(target));
   }
 
 // Gera texto de se esconder
@@ -924,6 +965,7 @@ class Game {
     this.narrator = new Narrator();
     this._firstRun = true;  // Flag para controlar primeira execução
     this._deathCause = null;  // Causa da morte anterior
+    this._actionHistory = [];  // Histórico de ações da run atual
     this.actions = this.createActions();
     this.actionMap = new Map(this.actions.map((action) => [action.key, action]));
     this.phase = "exploration";  // Fase atual: exploration ou intruder
@@ -1027,6 +1069,9 @@ class Game {
     this.knowledge.windowOpen = false;
     this.knowledge.windowBroken = false;
     
+    // Reseta histórico de ações
+    this._actionHistory = [];
+    
     // Só mostra mensagem de abertura na primeira vez
     if (this._firstRun) {
       this.logLines(this.narrator.opening(this));
@@ -1063,6 +1108,7 @@ class Game {
     this.logLines(lines, kind);
     this.renderClock();
     console.log(colorizeAndStylize("\n" + texts.ui.gameOver + "\n", colors.white, styles.bold));
+    this.showActionHistory();
     this.promptRestart();
   }
 
@@ -1276,6 +1322,37 @@ class Game {
     this.endGame(this.narrator.escapeWindowFailure(), "danger", "windowFailed");
   }
 
+// Resolve ataque rápido quando intruso está distraído
+  resolveQuickAttack() {
+    if (this.gameOver || this.phase !== "intruder") {
+      return;
+    }
+
+    if (!this.intruder.distracted) {
+      this.logLine("Ele não está distraído.");
+      return;
+    }
+
+    this.intruder.stunned = true;
+    this.intruder.distracted = false;
+    this.logLines(this.narrator.stunSuccess(this));
+  }
+
+// Resolve fuga rápida quando intruso está distraído
+  resolveQuickEscape() {
+    if (this.gameOver || this.phase !== "intruder") {
+      return;
+    }
+
+    if (!this.intruder.distracted) {
+      this.logLine("Ele não está distraído.");
+      return;
+    }
+
+    this.intruder.distracted = false;
+    this.endGame(this.narrator.escapeWindowSuccess(this), "system", null);
+  }
+
 // Processa escolha de ação do jogador
   handleSlot(slot) {
     if (this.gameOver) {
@@ -1295,6 +1372,13 @@ class Game {
 
     // Rastreia ação atual para mensagens de morte contextuais
     this.currentAction = action;
+    
+    // Adiciona ação ao histórico
+    this._actionHistory.push({
+      action: action.label(this),
+      time: this.timeLeft,
+      phase: this.phase
+    });
 
     // Verifica se ação vai esgotar o tempo antes de executar
     if (this.phase === "exploration" && this.timeLeft - action.cost <= 0) {
@@ -1368,6 +1452,25 @@ class Game {
         process.exit(0);
       }
     });
+  }
+
+// Mostra histórico de ações da run atual
+  showActionHistory() {
+    if (this._actionHistory.length === 0) {
+      return;
+    }
+
+    console.log(colorizeAndStylize("\n--- Ações Realizadas ---", colors.gray, styles.bold));
+    this._actionHistory.forEach((entry, index) => {
+      const timeColor = entry.time <= 2 ? colors.red : colors.white;
+      const phaseText = entry.phase === "exploration" ? "Exploração" : "Intruso";
+      console.log(
+        `${index + 1}. ${entry.action} ` +
+        `(${colorize(phaseText, colors.blue)}, ` +
+        `${colorize(entry.time.toFixed(1) + 's', timeColor)})`
+      );
+    });
+    console.log();
   }
 }
 
